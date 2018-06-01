@@ -18,7 +18,7 @@
 ##
 
 BINARY = gbxprog
-OBJS = ramdisk.o
+OBJS = ramdisk.o cartio.o flash.o
 
 OPENCM3_DIR = ../libopencm3
 LDSCRIPT = ../stm32f103x8_bl.ld
