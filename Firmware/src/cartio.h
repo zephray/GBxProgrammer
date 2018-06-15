@@ -21,4 +21,21 @@ typedef enum cap {
   CAP_4M,
   CAP_8M} cap_t;
 
+void gb_delay(void);
+void cart_reset(void);
+// GameBoy related functions
+void cart_set_gb_mode(void);
+uint8_t cart_gb_read(uint16_t addr, bool ram_access);
+void cart_gb_write(uint16_t addr, uint8_t data, bool ram_access);
+#ifdef HW_R2
+void cart_set_gba_mode(void);
+uint16_t cart_gba_read(uint32_t addr);
+uint8_t cart_gba_ram_read(uint16_t addr);
+void cart_gba_ram_write(uint16_t addr, uint8_t data);
+void cart_set_eeprom_mode(void);
+void cart_eeprom_a_write(uint16_t addr, bool write, cap_t cap);
+void cart_eeprom_read(uint16_t addr, uint8_t * buffer, cap_t cap);
+void cart_eeprom_write(uint16_t addr, uint8_t *buffer, cap_t cap);
+#endif
+
 #endif
