@@ -3,7 +3,6 @@
 #include "string.h"
 #include "stdlib.h"
 #include "FAT16.h"
-#include "stmflash.h"
 #include "main.h"
 #include "cartio.h"
 #define WBVAL(x) ((x) & 0xFF), (((x) >> 8) & 0xFF)
@@ -91,10 +90,10 @@ uint8_t dir_sector_file[DIR_FILE_SIZE]=
     'I','N','F','O',' ',' ',' ',' ','T','X','T',  // File name
     0x20,           // File attribute = Archive
     0x00,           // Reserved 
-    0x4B,           // Create Time Tenth 
+    0x00,           // Create Time Tenth 
     WBVAL(TIME(11, 49, 0)),  // Create Time 
     WBVAL(DATE(38, 7, 1)),  // Create Date 
-    WBVAL(TIME(11, 49, 0)),  // Last Access Date 
+    WBVAL(DATE(38, 7, 1)),   // Last Access Date 
     0x00, 0x00,     // Not used in FAT16 
     WBVAL(TIME(11, 49, 0)),  // Write Time 
     WBVAL(DATE(38, 7, 1)),  // Write Date 
@@ -104,10 +103,10 @@ uint8_t dir_sector_file[DIR_FILE_SIZE]=
     'R','O','M',' ',' ',' ',' ',' ','G','B',' ',  // File name
     0x20,           // File attribute = Archive
     0x00,           // Reserved 
-    0x4B,           // Create Time Tenth 
+    0x00,           // Create Time Tenth 
     WBVAL(TIME(11, 49, 0)),  // Create Time 
     WBVAL(DATE(38, 7, 1)),  // Create Date 
-    WBVAL(TIME(11, 49, 0)),  // Last Access Date 
+    WBVAL(DATE(38, 7, 1)),   // Last Access Date 
     0x00, 0x00,     // Not used in FAT16 
     WBVAL(TIME(11, 49, 0)),  // Write Time 
     WBVAL(DATE(38, 7, 1)),  // Write Date 
@@ -117,10 +116,10 @@ uint8_t dir_sector_file[DIR_FILE_SIZE]=
     'R','A','M',' ',' ',' ',' ',' ','S','A','V',  // File name
     0x20,           // File attribute = Archive
     0x00,           // Reserved 
-    0x4B,           // Create Time Tenth 
+    0x00,           // Create Time Tenth 
     WBVAL(TIME(11, 49, 0)),  // Create Time 
     WBVAL(DATE(38, 7, 1)),  // Create Date 
-    WBVAL(TIME(11, 49, 0)),  // Last Access Date 
+    WBVAL(DATE(38, 7, 1)),   // Last Access Date 
     0x00, 0x00,     // Not used in FAT16 
     WBVAL(TIME(11, 49, 0)),  // Write Time 
     WBVAL(DATE(38, 7, 1)),  // Write Date 
@@ -188,7 +187,7 @@ uint32_t fat_read_lba(uint32_t lba, uint8_t* data)
         target = target % SECTOR_PER_FAT;
         if (target == 0) {
             // First 2 clusters are fixed
-            data[0] = 0xF0;
+            data[0] = 0xF8;
             data[1] = 0xFF;
             data[2] = 0xFF;
             data[3] = 0xFF;

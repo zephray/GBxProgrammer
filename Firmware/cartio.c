@@ -135,7 +135,7 @@ __attribute__((always_inline)) inline void gba_a_write(uint32_t addr) {
 #endif
 
 void gb_delay(void) {
-    volatile size_t i = 5;
+    volatile size_t i = 2;
     while (i--);
 }
 

@@ -2,6 +2,10 @@ Hardware/History/
 Hardware/Project Logs for GBxProg/
 Hardware/Project Outputs for GBxProg/
 Hardware/__Previews/
+Firmware/EWARM/Exe
+Firmware/EWARM/List
+Firmware/EWARM/Obj
+Firmware/EWARM/settings
 
 # Windows image file caches
 Thumbs.db
