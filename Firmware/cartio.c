@@ -1,26 +1,47 @@
 #include "main.h"
 #include "cartio.h"
-
-#define CART_GB_RES_CS2_PORT    GPIOC
-#define CART_GB_RES_CS2_PIN     GPIO_Pin_13
-#define CART_GB_AIN_IRQ_PORT    GPIOA
-#define CART_GB_AIN_IRQ_PIN     GPIO_Pin_15
-#define CART_GB_WR_PORT         GPIOA
-#define CART_GB_WR_PIN          GPIO_Pin_8
-#define CART_GB_RD_PORT         GPIOA
-#define CART_GB_RD_PIN          GPIO_Pin_9
-#define CART_GB_CS_PORT         GPIOA
-#define CART_GB_CS_PIN          GPIO_Pin_10
-#ifdef HW_R2
-#define CART_GBA_D0_PORT        GPIOB
-#define CART_GBA_D0_PIN         GPIO0
-#define CART_GB_A_DIR_PORT      GPIOC
-#define CART_GB_A_DIR_PIN       GPIO_Pin_15
-#endif
-#define CART_GB_D_DIR_PORT      GPIOC
-#define CART_GB_D_DIR_PIN       GPIO_Pin_14
+#include "delay.h"
 
 mbc_t cart_mbc;
+seq_type_t flash_seq_type;
+wait_mode_t flash_wait_mode;
+
+#define SEQ_TYPE_COUNT 3
+// AIN
+// WR - 8bit Flash
+// WR - 16bit Flash in 8bit mode
+
+#define SEQ_BYTE_PROGRAM_LEGNTH 3
+const uint8_t SEQ_BYTE_PROGRAM[SEQ_TYPE_COUNT][SEQ_BYTE_PROGRAM_LEGNTH*3] = {
+    {0x55, 0x55, 0xaa, 0x2a, 0xaa, 0x55, 0x55, 0x55, 0xa0},
+    {0x05, 0x55, 0xaa, 0x02, 0xaa, 0x55, 0x05, 0x55, 0xa0},
+    {0x0a, 0xaa, 0xaa, 0x05, 0x55, 0x55, 0x0a, 0xaa, 0xa0}
+};
+
+#define SEQ_CHIP_ERASE_LENGTH 6
+const uint8_t SEQ_CHIP_ERASE[SEQ_TYPE_COUNT][SEQ_CHIP_ERASE_LENGTH*3] = {
+	{0x55, 0x55, 0xaa, 0x2a, 0xaa, 0x55, 0x55, 0x55, 0x80, 0x55, 0x55, 0xaa, 0x2a, 0xaa, 0x55, 0x55, 0x55, 0x10},
+    {0x05, 0x55, 0xaa, 0x02, 0xaa, 0x55, 0x05, 0x55, 0x80, 0x05, 0x55, 0xaa, 0x02, 0xaa, 0x55, 0x05, 0x55, 0x10},
+	{0x0a, 0xaa, 0xaa, 0x05, 0x55, 0x55, 0x0a, 0xaa, 0x80, 0x0a, 0xaa, 0xaa, 0x05, 0x55, 0x55, 0x0a, 0xaa, 0x10}
+};
+
+#define SEQ_PRODUCT_ID_LENGTH 3
+const uint8_t SEQ_PRODUCT_ID[SEQ_TYPE_COUNT][SEQ_PRODUCT_ID_LENGTH*3] = {
+	{0x55, 0x55, 0xaa, 0x2a, 0xaa, 0x55, 0x55, 0x55, 0x90},
+    {0x05, 0x55, 0xaa, 0x02, 0xaa, 0x55, 0x05, 0x55, 0x90},
+	{0x0a, 0xaa, 0xaa, 0x05, 0x55, 0x55, 0x0a, 0xaa, 0x90}
+};
+
+#define SEQ_PRODUCT_ID_EXIT_LENGTH 3
+const uint8_t SEQ_PRODUCT_ID_EXIT[SEQ_TYPE_COUNT][SEQ_PRODUCT_ID_EXIT_LENGTH*3] = {
+	{0x55, 0x55, 0xaa, 0x2a, 0xaa, 0x55, 0x55, 0x55, 0xf0},
+    {0x05, 0x55, 0xaa, 0x02, 0xaa, 0x55, 0x05, 0x55, 0xf0},
+	{0x0a, 0xaa, 0xaa, 0x05, 0x55, 0x55, 0x0a, 0xaa, 0xf0}
+};
+
+const uint8_t ADDR_FLASH_MANUF[SEQ_TYPE_COUNT] = {0x00, 0x00, 0x00};
+const uint8_t ADDR_FLASH_ID[SEQ_TYPE_COUNT] = {0x01, 0x01, 0x02};
+const uint8_t ADDR_FLASH_PROTECT[SEQ_TYPE_COUNT] = {0x02, 0x02, 0x04};
 
 // GB    GBA
 // D7-0  ADDR23-16 RAM_D7-0
@@ -218,19 +239,42 @@ uint8_t cart_gb_read(uint16_t addr, bool ram_access) {
     return data;
 }
 
+uint8_t cart_gb_read_bus() {
+    gb_rd_low();
+    gb_delay();
+    uint8_t data = gb_d_read();
+    gb_rd_high();
+    return data;
+}
+
 void cart_gb_write(uint16_t addr, uint8_t data, bool ram_access) {
     gb_d_set_output();
     gb_a_write(addr);
     gb_d_write(data);
     if (ram_access) gb_cs_low();
     gb_wr_low();
-    gb_ain_irq_low();
     gb_delay();
     gb_wr_high();
-    gb_ain_irq_high();
     if (ram_access) gb_cs_high();
 }
 
+void cart_gb_write_ain(uint16_t addr, uint8_t data) {
+    gb_d_set_output();
+    gb_a_write(addr);
+    gb_d_write(data);
+    gb_ain_irq_low();
+    gb_delay();
+    gb_ain_irq_high();
+}
+
+void cart_gb_write_flash(uint16_t addr, uint8_t data) {
+    if (flash_seq_type == TYPE_AIN) {
+        cart_gb_write_ain(addr, data);
+    }
+    else {
+        cart_gb_write(addr, data, FALSE);
+    }
+}
 
 // More application specific function calls
 void cart_gb_read_bulk(uint8_t *buffer, uint16_t addr, uint16_t size, bool ram_access) {
@@ -427,3 +471,118 @@ void cart_eeprom_write(uint16_t addr, uint8_t *buffer, cap_t cap) {
     gb_cs_high();
 }
 #endif
+
+// Flash Related Functions
+void cart_set_seq_type(seq_type_t new_type) {
+    flash_seq_type = new_type;
+}
+
+void cart_set_wait_mode(wait_mode_t new_mode) {
+    flash_wait_mode = new_mode;
+}
+
+void cart_wait_flash(wait_opt_t option, uint8_t dat) {
+    uint8_t t;
+    uint32_t timeout;
+    
+    gb_d_set_input();
+    switch (flash_wait_mode) {
+    case MODE_POLL:
+        t = dat & 0x80;
+        timeout = PRGM_TIMEOUT;
+        do {
+            gb_delay();
+            if (option == OPT_PROGRAM) timeout --;
+        } while (((cart_gb_read_bus() & 0x80) != t)&&(timeout != 0));
+        break;
+    case MODE_TOGGLE:
+        do {
+            gb_delay();
+            t = cart_gb_read_bus();
+            gb_delay();
+        } while (t != (cart_gb_read_bus() & 0x40));
+        break;
+    case MODE_DEFAULT:
+        if (option == OPT_PROGRAM)
+            delay_us(DEF_PRGM_DELAY);
+        else
+            delay_ms(DEF_ERASE_DELAY);
+        break;
+    case MODE_LONGER:
+        if (option == OPT_PROGRAM)
+            delay_us(LONG_PRGM_DELAY);
+        else
+            delay_ms(LONG_ERASE_DELAY);
+        break;
+    }
+}
+
+void cart_erase_flash() {
+    if (flash_seq_type == TYPE_AIN)
+        cart_gb_switch_rom_bank(0x001);
+    for (uint32_t i = 0; i < SEQ_CHIP_ERASE_LENGTH; i++) {
+        cart_gb_write_flash(
+            ((uint16_t)SEQ_CHIP_ERASE[flash_seq_type][i*3+0] << 8) | (uint16_t)SEQ_CHIP_ERASE[flash_seq_type][i*3+1],
+            SEQ_CHIP_ERASE[flash_seq_type][i*3+2]);
+    }
+    cart_wait_flash(OPT_ERASE, 0xFF);
+}
+
+void cart_program_byte(uint32_t addr, uint8_t dat) {
+    // Set FLASH to write mode
+    if (flash_seq_type == TYPE_AIN)
+        cart_gb_switch_rom_bank(0x001);
+    else
+        if (addr > 0x3fff)
+            cart_gb_switch_rom_bank(addr >> 14);
+    for (uint32_t i = 0; i < SEQ_BYTE_PROGRAM_LEGNTH; i++) {
+        cart_gb_write_flash(
+            ((uint16_t)SEQ_BYTE_PROGRAM[flash_seq_type][i*3+0] << 8) | (uint16_t)SEQ_BYTE_PROGRAM[flash_seq_type][i*3+1],
+            SEQ_BYTE_PROGRAM[flash_seq_type][i*3+2]);
+    }
+    
+    // Write the byte
+    if (flash_seq_type == TYPE_AIN)
+        if (addr > 0x3fff)
+            cart_gb_switch_rom_bank(addr >> 14);
+    if (addr > 0x3fff)
+        cart_gb_write_flash(0x4000 | addr & 0x3fff, dat);
+    else
+        cart_gb_write_flash(addr, dat);
+    
+    // Various mbc setting might have been changed, set back?
+    //cart_gb_set_mbc1_model(MODEL_16_8);
+    //if (addr > 0x3fff)
+    //    cart_gb_switch_rom_bank(addr >> 14);
+    
+    // Wait write process to finish
+    cart_wait_flash(OPT_PROGRAM, dat);
+}
+
+void cart_enter_product_id_mode() {
+    if (flash_seq_type == TYPE_AIN)
+        cart_gb_switch_rom_bank(0x001);
+    for (uint32_t i = 0; i < SEQ_PRODUCT_ID_LENGTH; i++) {
+        cart_gb_write_flash(
+            ((uint16_t)SEQ_PRODUCT_ID[flash_seq_type][i*3+0] << 8) | (uint16_t)SEQ_PRODUCT_ID[flash_seq_type][i*3+1],
+            SEQ_PRODUCT_ID[flash_seq_type][i*3+2]);
+    }
+    gb_d_set_input();
+}
+
+void cart_leave_product_id_mode() {
+    if (flash_seq_type == TYPE_AIN)
+        cart_gb_switch_rom_bank(0x001);
+    for (uint32_t i = 0; i < SEQ_PRODUCT_ID_EXIT_LENGTH; i++) {
+        cart_gb_write_flash(
+            ((uint16_t)SEQ_PRODUCT_ID_EXIT[flash_seq_type][i*3+0] << 8) | (uint16_t)SEQ_PRODUCT_ID_EXIT[flash_seq_type][i*3+1],
+            SEQ_PRODUCT_ID_EXIT[flash_seq_type][i*3+2]);
+    }
+    gb_d_set_input();
+}
+
+void cart_gb_rom_program_bulk(uint8_t *buffer, uint32_t addr, uint16_t size) {
+    for (uint32_t i = 0; i < size; i++) {
+        cart_program_byte(addr + i, buffer[i]);
+    }
+}

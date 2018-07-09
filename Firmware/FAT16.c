@@ -2,47 +2,9 @@
 
 #include "string.h"
 #include "stdlib.h"
-#include "FAT16.h"
+#include "fat16.h"
 #include "main.h"
 #include "cartio.h"
-#define WBVAL(x) ((x) & 0xFF), (((x) >> 8) & 0xFF)
-#define QBVAL(x) ((x) & 0xFF), (((x) >> 8) & 0xFF),\
-         (((x) >> 16) & 0xFF), (((x) >> 24) & 0xFF)
-
-#define DATE(y, m, d) (((y & 0x7F) << 9) | ((m & 0xF) << 5) | (d & 0x1F))
-#define TIME(h, m, s) (((h & 0xF) << 11) | ((m & 0x3F) << 5) | ((s & 0x1F)))
-          // Unit: 2s
-           
-// All the definitions are meant to help understand the code, but not to be modified
-           
-           
-// Each cluster is 8KB
-// 100MB total
-// Each sector can hold 1024 FAT entries, which can manage 8MB of data
-// 13 FATS can manage 104MB of data, with last 4MB unused
-#define SECTOR_COUNT              51200
-#define BYTES_PER_SECTOR          2048   // Do not change, need to be the same as the USB driver
-#define SECTORS_PER_CLUSTER       4
-#define BYTES_PER_CLUSTER         (BYTES_PER_SECTOR * SECTORS_PER_CLUSTER)
-#define RESERVED_SECTORS          2
-#define FAT_COPIES                2
-#define CLUSTERS_IN_A_FAT_SECTOR  (BYTES_PER_SECTOR / 2) // 1024
-#define SECTOR_PER_FAT            13
-#define SECTOR_PER_TRACK          63
-#define NUM_HEADS                 255
-#define ROOT_ENTRIES              512
-#define ROOT_ENTRY_LENGTH         32
-#define FAT_ENTRY_SECTOR(x)   (RESERVED_SECTORS + x * SECTOR_PER_FAT)
-#define ROOT_ENTRY_SECTOR     (RESERVED_SECTORS + FAT_COPIES * SECTOR_PER_FAT) // 2+ 2*13 = 28
-#define DATA_REGION_SECTOR    (ROOT_ENTRY_SECTOR + \
-            (ROOT_ENTRIES * ROOT_ENTRY_LENGTH) / BYTES_PER_SECTOR) // 28 + 512 * 32 / 2048 = 36
-#define FILEDATA_START_SECTOR(x)   (DATA_REGION_SECTOR + \
-            (x - 2) * SECTORS_PER_CLUSTER)
-
-#define INFO_FILE_START_CLUSTER  2  // First avaliable cluster
-#define ROM_FILE_START_CLUSTER   CLUSTERS_IN_A_FAT_SECTOR // Info file should only occupy 1 cluster, but things are better to be 8MB aligned
-#define RAM_FILE_START_CLUSTER   (ROM_FILE_START_CLUSTER + (32*1024*1024 / BYTES_PER_CLUSTER)) // ROM file can be as large as 32MB, that's the largest possible value
-#define USER_FILE_START_CLUSTER  (RAM_FILE_START_CLUSTER + (8*1024*1024 / BYTES_PER_CLUSTER))  // Allocate 8 MB for RAM file
 
 // ROM start sector = 36 + (1024 - 2) * 4 = 4124 
 
@@ -127,7 +89,19 @@ uint8_t dir_sector_file[DIR_FILE_SIZE]=
     QBVAL(8192),  // File Size  
 };
 
-uint8_t InfoFileContent[FILE_INFO_MAX_SIZE];
+uint8_t dir_sector_free[DIR_WRITABLE_SIZE];
+
+bool is_writing_rom = TRUE;
+bool is_writing_valid = FALSE;
+uint16_t writing_start_cluster;
+extern bool is_flash_empty;
+
+uint8_t info_file_content[FILE_INFO_MAX_SIZE];
+
+void fat_init() {
+    memset(dir_sector_free, DIR_WRITABLE_SIZE, 0x00);
+    is_writing_valid = FALSE;
+}
 
 void fat_set_filesize(uint32_t file_no, uint32_t file_size) {
     dir_sector_file[32*file_no + 28] = file_size & 0xff;
@@ -173,13 +147,14 @@ uint32_t fat_read_lba(uint32_t lba, uint8_t* data)
     else if (lba >= FILEDATA_START_SECTOR(INFO_FILE_START_CLUSTER)) {
         target = lba - FILEDATA_START_SECTOR(INFO_FILE_START_CLUSTER);
         if (target == 0)
-          memcpy(data, InfoFileContent, sizeof(InfoFileContent));
+          memcpy(data, info_file_content, sizeof(info_file_content));
     }
     else if (lba >= ROOT_ENTRY_SECTOR) {
         target = lba - ROOT_ENTRY_SECTOR;
         if (target == 0) {
             memcpy(data, dir_sector_label, DIR_LABEL_SIZE);
             memcpy(data + DIR_LABEL_SIZE, dir_sector_file, DIR_FILE_SIZE);
+            memcpy(data + DIR_LABEL_SIZE + DIR_FILE_SIZE, dir_sector_free, DIR_WRITABLE_SIZE);
         }
     }
     else if (lba >= FAT_ENTRY_SECTOR(0)) {
@@ -261,10 +236,56 @@ uint32_t fat_read_lba(uint32_t lba, uint8_t* data)
 
 uint32_t fat_write_lba(uint32_t lba, uint8_t* data)
 {
-    /*switch(FAT_LBA)
-    {
-       break; 
-    }*/
+    uint32_t target;
+    
+    if (lba >= FILEDATA_START_SECTOR(USER_FILE_START_CLUSTER)) {
+        //target = lba - FILEDATA_START_SECTOR(USER_FILE_START_CLUSTER);
+        if ((is_writing_valid)&&(lba >= FILEDATA_START_SECTOR(writing_start_cluster))) {
+            target = lba - FILEDATA_START_SECTOR(writing_start_cluster);
+            cart_gb_rom_program_bulk(data, target * BYTES_PER_SECTOR, BYTES_PER_SECTOR);
+        }
+    }
+    else if (lba >= FILEDATA_START_SECTOR(INFO_FILE_START_CLUSTER)) {
+        ;
+        // Good bye
+    }
+    else if (lba >= ROOT_ENTRY_SECTOR) {
+        target = lba - ROOT_ENTRY_SECTOR;
+        if (target == 0) {
+            memcpy(dir_sector_free, data + DIR_LABEL_SIZE + DIR_FILE_SIZE, DIR_WRITABLE_SIZE);
+            // Scan the written data
+            is_writing_valid = FALSE;
+            for (uint32_t i = 0; i < WRITABLE_COUNT; i++) {
+                if (dir_sector_free[i * 32 + 0x0B] != 0x0F) {
+                    // this is not a LFN entry
+                    if (memcmp(dir_sector_free + i * 32 + 8, "GB", 2) == 0) {
+                        is_writing_valid = TRUE;
+                        is_writing_rom = TRUE;
+                        writing_start_cluster = (uint16_t)dir_sector_free[i * 32 + 27] << 8;
+                        writing_start_cluster |=  dir_sector_free[i * 32 + 26];
+                        if (!is_flash_empty) {
+                            cart_erase_flash();
+                            is_flash_empty = TRUE;
+                        }
+                    }
+                    else if (memcmp(dir_sector_free + i * 32 + 8, "SAV", 3) == 0) {
+                        is_writing_valid = TRUE;
+                        is_writing_rom = FALSE;
+                        writing_start_cluster = (uint16_t)dir_sector_free[i * 32 + 27] << 8;
+                        writing_start_cluster |=  dir_sector_free[i * 32 + 26];
+                    }
+                }
+            }
+        }
+    }
+    else if (lba >= FAT_ENTRY_SECTOR(0)) {
+        ;
+        // I ~ ~ g ~ o ~ t ~ ~ y ~ o ~ u ~ !
+    }
+    else if (lba == 0) {
+        ;
+        // WHY??
+    }
     
     return BYTES_PER_SECTOR;
 }

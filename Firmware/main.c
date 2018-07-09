@@ -26,6 +26,9 @@ bool flash_valid;
 bool is_cgb_game;
 bool has_ram;
 mbc_t mbc_type; 
+const char *manuf_string;
+const char *model_string;
+bool is_flash_empty;
     
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -39,13 +42,311 @@ mbc_t mbc_type;
   * @retval None
   */
 
+bool check_flash_id(uint8_t manuf_id, uint8_t dev_id) {
+    bool valid = FALSE;
+    manuf_string = "Unknown";
+    model_string = "Unknown";
+    if (manuf_id == 0x52) {
+        valid = TRUE;
+        manuf_string = "Alliance";
+        if      (dev_id == 0x34) { model_string = "AS29F002B"; }
+        else if (dev_id == 0xB0) { model_string = "AS29F002T"; }
+        else if (dev_id == 0x04) { model_string = "AS29F010"; }
+        else if (dev_id == 0xA4) { model_string = "AS29F040"; }
+        else if (dev_id == 0x57) { model_string = "AS29F200B"; }
+        else if (dev_id == 0x51) { model_string = "AS29F200T"; }
+        else if (dev_id == 0x49) { model_string = "AS29LV160B"; }
+        else if (dev_id == 0xCA) { model_string = "AS29LV160T"; }
+        else if (dev_id == 0xBA) { model_string = "AS29LV400B"; }
+        else if (dev_id == 0xB9) { model_string = "AS29LV400T"; }
+        else if (dev_id == 0x5B) { model_string = "AS29LV800B"; }
+        else if (dev_id == 0xDA) { model_string = "AS29LV800T"; }
+        else { valid = FALSE; }
+    }
+    else if (manuf_id == 0x01) {
+        valid = TRUE;
+        manuf_string = "AMD";
+        if      (dev_id == 0x0C) { model_string = "AM29DL400BT"; }
+        else if (dev_id == 0x0F) { model_string = "AM29DL400BB"; }
+        else if (dev_id == 0x4A) { model_string = "AM29DL800BT"; }
+        else if (dev_id == 0xCB) { model_string = "AM29DL800BB"; }
+        else if (dev_id == 0x34) { model_string = "AM29F002BB"; }
+        else if (dev_id == 0xB0) { model_string = "AM29F002BT"; }
+        else if (dev_id == 0x7B) { model_string = "AM29F004BB"; }
+        else if (dev_id == 0x77) { model_string = "AM29F004BT"; }
+        else if (dev_id == 0xAD) { model_string = "AM29F016D"; }
+        else if (dev_id == 0x20) { model_string = "AM29F010"; }
+        else if (dev_id == 0xA4) { model_string = "AM29F040"; }
+        else if (dev_id == 0xD5) { model_string = "AM29F080"; }
+        else if (dev_id == 0x57) { model_string = "AM29F200BB"; }
+        else if (dev_id == 0x51) { model_string = "AM29F200BT"; }
+        else if (dev_id == 0xAB) { model_string = "AM29F400BB"; }
+        else if (dev_id == 0x23) { model_string = "AM29F400BT"; }
+        else if (dev_id == 0x58) { model_string = "AM29F800BB"; }
+        else if (dev_id == 0xD6) { model_string = "AM29F800BT"; }
+        else if (dev_id == 0x6D) { model_string = "AM29LV001BB"; }
+        else if (dev_id == 0xED) { model_string = "AM29LV001BT"; }
+        else if (dev_id == 0x6E) { model_string = "AM29LV010B"; }
+        else if (dev_id == 0xC2) { model_string = "AM29LV002BB"; }
+        else if (dev_id == 0x40) { model_string = "AM29LV002BT"; }
+        else if (dev_id == 0xB6) { model_string = "AM29LV004BB"; }
+        else if (dev_id == 0xB5) { model_string = "AM29LV004BT"; }
+        else if (dev_id == 0x37) { model_string = "AM29LV008BB"; }
+        else if (dev_id == 0x3E) { model_string = "AM29LV008BT"; }
+        else if (dev_id == 0x4F) { model_string = "AM29LV040B"; }
+        else if (dev_id == 0x38) { model_string = "AM29LV080B"; }
+        else if (dev_id == 0xBF) { model_string = "AM29LV200BB"; }
+        else if (dev_id == 0x3B) { model_string = "AM29LV200BT"; }
+        else if (dev_id == 0x5B) { model_string = "AM29LV800BB"; }
+        else if (dev_id == 0xB9) { model_string = "AM29LV400BT"; }
+        else if (dev_id == 0xBA) { model_string = "AM29LV400BB"; }
+        else if (dev_id == 0xDA) { model_string = "AM29LV800BT"; }
+        else { valid = FALSE; }
+    }
+    else if (manuf_id == 0x37) {
+        valid = TRUE;
+        manuf_string = "AMIC";
+        if      (dev_id == 0x0D) { model_string = "A29002B"; }
+        else if (dev_id == 0x8C) { model_string = "A29002T"; }
+        else if (dev_id == 0x86) { model_string = "A29040B"; }
+        else if (dev_id == 0xB0) { model_string = "A29400T"; }
+        else if (dev_id == 0x31) { model_string = "A29400U"; }
+        else if (dev_id == 0x0E) { model_string = "A29800T"; }
+        else if (dev_id == 0x8F) { model_string = "A29800U"; }
+        else if (dev_id == 0x34) { model_string = "A29L004T"; }
+        else if (dev_id == 0xB5) { model_string = "A29L004U"; }
+        else if (dev_id == 0x1A) { model_string = "A29L008T"; }
+        else if (dev_id == 0x9B) { model_string = "A29L008U"; }
+        else if (dev_id == 0x92) { model_string = "A29L040"; }
+        else if (dev_id == 0x9D) { model_string = "A29LF040A"; }
+        else { valid = FALSE; }
+    }
+    else if (manuf_id == 0x1F) {
+        valid = TRUE;
+        manuf_string = "ATMEL";
+        if      (dev_id == 0x3D) { model_string = "AT29LV512"; }
+        else if (dev_id == 0x35) { model_string = "AT29LV010A"; }
+        else if (dev_id == 0xBA) { model_string = "AT29LV020"; }
+        else if (dev_id == 0xC4) { model_string = "AT29BV040A"; }
+        else if (dev_id == 0xA4) { model_string = "AT29C040A"; }
+        else if (dev_id == 0xD5) { model_string = "AT29C010A"; }
+        else if (dev_id == 0xDA) { model_string = "AT29C020"; }
+        else if (dev_id == 0x5D) { model_string = "AT29C512"; }
+        else if (dev_id == 0x03) { model_string = "AT49BV512"; }
+        else if (dev_id == 0x05) { model_string = "AT49F001N"; }
+        else if (dev_id == 0x04) { model_string = "AT49F001NT"; }
+        else if (dev_id == 0x0B) { model_string = "AT49F020"; }
+        else if (dev_id == 0x07) { model_string = "AT49F002N"; }
+        else if (dev_id == 0x08) { model_string = "AT49F002NT"; }
+        else if (dev_id == 0xE9) { model_string = "AT49LH002"; }
+        else if (dev_id == 0xED) { model_string = "AT49LH00B4"; }
+        else if (dev_id == 0xEE) { model_string = "AT49LH004"; }
+        else if (dev_id == 0x08) { model_string = "AT49F002NT"; }
+        else if (dev_id == 0x17) { model_string = "AT49F010"; }
+        else if (dev_id == 0x0B) { model_string = "AT49F020"; }
+        else if (dev_id == 0x13) { model_string = "AT49F040"; }
+        else if (dev_id == 0x23) { model_string = "AT49F080"; }
+        else if (dev_id == 0x27) { model_string = "AT49F080T"; }
+        else { valid = FALSE; }
+    }
+    else if (manuf_id == 0x1C) {
+        valid = TRUE;
+        manuf_string = "EON";
+        if      (dev_id == 0x20) { model_string = "EN29F010"; }
+        else if (dev_id == 0x04) { model_string = "EN29F040"; }
+        else if (dev_id == 0x6E) { model_string = "EN29LV010"; }
+        else if (dev_id == 0x4F) { model_string = "EN29LV040"; }
+        else if (dev_id == 0xCB) { model_string = "EN29LV640B"; }
+        else if (dev_id == 0xC9) { model_string = "EN29LV640T"; }
+        else if (dev_id == 0x7E) { model_string = "EN29LV640U"; }
+        else if (dev_id == 0x92) { model_string = "EN29F002T"; }
+        else if (dev_id == 0x97) { model_string = "EN29F002B"; }
+        else { valid = FALSE; }
+    }
+    else if (manuf_id == 0x04) {
+        valid = TRUE;
+        manuf_string = "Fujitsu";
+        if      (dev_id == 0x0F) { model_string = "MBM29DL400BC"; }  
+        else if (dev_id == 0x0C) { model_string = "MBM29DL400TC"; }  
+        else if (dev_id == 0xCB) { model_string = "MBM29DL800BA"; }  
+        else if (dev_id == 0x4A) { model_string = "MBM29DL800TA"; }  
+        else if (dev_id == 0x34) { model_string = "MBM29F002BC"; }  
+        else if (dev_id == 0xB0) { model_string = "MBM29F002TC"; }  
+        else if (dev_id == 0x7B) { model_string = "MBM29F004BC"; }  
+        else if (dev_id == 0x77) { model_string = "MBM29F004TC"; }  
+        else if (dev_id == 0xA4) { model_string = "MBM29F040C"; }  
+        else if (dev_id == 0xD5) { model_string = "MBM29F080A"; }  
+        else if (dev_id == 0x57) { model_string = "MBM29F200BC"; }  
+        else if (dev_id == 0x51) { model_string = "MBM29F200TC"; }  
+        else if (dev_id == 0xAB) { model_string = "MBM29F400BC"; }  
+        else if (dev_id == 0x23) { model_string = "MBM29F400TC"; }  
+        else if (dev_id == 0x58) { model_string = "MBM29F800BA"; }  
+        else if (dev_id == 0xD6) { model_string = "MBM29F800TA"; }  
+        else if (dev_id == 0xC2) { model_string = "MBM29LV002BC"; }  
+        else if (dev_id == 0x40) { model_string = "MBM29LV002TC"; }  
+        else if (dev_id == 0xB6) { model_string = "MBM29LV004BC"; }  
+        else if (dev_id == 0xB5) { model_string = "MBM29LV004TC"; }  
+        else if (dev_id == 0x37) { model_string = "MBM29LV008BA"; }  
+        else if (dev_id == 0x3E) { model_string = "MBM29LV008TA"; }  
+        else if (dev_id == 0x38) { model_string = "MBM29LV080A"; }  
+        else if (dev_id == 0xBF) { model_string = "MBM29LV200BC"; }  
+        else if (dev_id == 0x3B) { model_string = "MBM29LV200TC"; }  
+        else if (dev_id == 0xBA) { model_string = "MBM29LV400BC"; }  
+        else if (dev_id == 0xB9) { model_string = "MBM29LV400TC"; }  
+        else if (dev_id == 0x5B) { model_string = "MBM29LV800BA"; }  
+        else if (dev_id == 0xDA) { model_string = "MBM29LV800TA"; }  
+        else if (dev_id == 0x49) { model_string = "MBM29LV160BE"; }  
+        else if (dev_id == 0x0C) { model_string = "MBM29LV160TE"; }  
+        else { valid = FALSE; }
+    }
+    else if (manuf_id == 0xAD) {
+        valid = TRUE;
+        manuf_string = "Hyundai";
+        if      (dev_id == 0x23) { model_string = "HY29F400T"; }    
+        else if (dev_id == 0x58) { model_string = "HY29F800B"; }    
+        else if (dev_id == 0x5B) { model_string = "HY29LV800B"; }    
+        else if (dev_id == 0xA4) { model_string = "HY29F040A"; }    
+        else if (dev_id == 0xAB) { model_string = "HY29F400B"; }    
+        else if (dev_id == 0x34) { model_string = "HY29F002B"; }    
+        else if (dev_id == 0xB0) { model_string = "HY29F002T"; }    
+        else if (dev_id == 0xB9) { model_string = "HY29LV400T"; }    
+        else if (dev_id == 0xBA) { model_string = "HY29LV400B"; }    
+        else if (dev_id == 0xD5) { model_string = "HY29F080"; }    
+        else if (dev_id == 0xD6) { model_string = "HY29F800T"; }    
+        else if (dev_id == 0xDA) { model_string = "HY29LV800T"; }   
+        else { valid = FALSE; }
+    }
+    else if (manuf_id == 0x89) {
+        valid = TRUE;
+        manuf_string = "Intel";
+        if      (dev_id == 0x14) { model_string = "i28F320J5"; }   
+        else if (dev_id == 0x15) { model_string = "i28F640J5"; }   
+        else if (dev_id == 0x16) { model_string = "i28F320J3"; }   
+        else if (dev_id == 0x17) { model_string = "i28F640J3"; }   
+        else if (dev_id == 0x18) { model_string = "i28F128J3"; }   
+        else if (dev_id == 0x1D) { model_string = "i28F256J3"; }   
+        else if (dev_id == 0x70) { model_string = "i28F400T"; }     
+        else if (dev_id == 0x71) { model_string = "i28F400B"; }     
+        else if (dev_id == 0x74) { model_string = "i28F200T"; }     
+        else if (dev_id == 0x75) { model_string = "i28F200B"; }     
+        else if (dev_id == 0x78) { model_string = "i28F004T"; }     
+        else if (dev_id == 0x79) { model_string = "i28F004B"; }     
+        else if (dev_id == 0x7C) { model_string = "i28F002T"; }     
+        else if (dev_id == 0x7D) { model_string = "i28F002B"; }     
+        else if (dev_id == 0x94) { model_string = "i28F001T"; }     
+        else if (dev_id == 0x95) { model_string = "i28F001B"; }     
+        else if (dev_id == 0x98) { model_string = "i28F008T"; }     
+        else if (dev_id == 0x99) { model_string = "i28F008B"; }     
+        else if (dev_id == 0x9C) { model_string = "i28F800T"; }     
+        else if (dev_id == 0x9D) { model_string = "i28F800B"; }     
+        else if (dev_id == 0xA0) { model_string = "i28F016SV"; }    
+        else if (dev_id == 0xA2) { model_string = "i28F008SA"; }   
+        else if (dev_id == 0xA6) { model_string = "i28F008S3"; }    
+        else if (dev_id == 0xA7) { model_string = "i28F004S3"; }    
+        else if (dev_id == 0xA8) { model_string = "i28F016XS"; }   
+        else if (dev_id == 0xAA) { model_string = "i28F016S3"; }    
+        else if (dev_id == 0xAC) { model_string = "i82802AC"; }   
+        else if (dev_id == 0xAD) { model_string = "i82802AB"; }   
+        else if (dev_id == 0xB4) { model_string = "i28F010"; }   
+        else if (dev_id == 0xB8) { model_string = "i28F512"; }   
+        else if (dev_id == 0xB9) { model_string = "i28F256A"; }   
+        else if (dev_id == 0xBD) { model_string = "i28F020"; }   
+        else if (dev_id == 0xD0) { model_string = "i28F016B3T"; } 
+        else if (dev_id == 0xD1) { model_string = "i28F016B3B"; }  
+        else if (dev_id == 0xD2) { model_string = "i28F008B3T"; }  
+        else if (dev_id == 0xD3) { model_string = "i28F008B3B"; }  
+        else if (dev_id == 0xD4) { model_string = "i28F004B3T"; }  
+        else if (dev_id == 0xD5) { model_string = "i28F004B3B"; }  
+        else { valid = FALSE; }
+    }
+    else if (manuf_id == 0xC2) {
+        valid = TRUE;
+        manuf_string = "Macronix";
+        if      (dev_id == 0x19) { model_string = "MX29F001B"; }  
+        else if (dev_id == 0x18) { model_string = "MX29F001T"; }  
+        else if (dev_id == 0x34) { model_string = "MX29F002B"; }   
+        else if (dev_id == 0xB0) { model_string = "MX29F002T"; }   
+        else if (dev_id == 0x46) { model_string = "MX29F004B"; }  
+        else if (dev_id == 0x45) { model_string = "MX29F004T"; }  
+        else if (dev_id == 0x37) { model_string = "MX29F022B"; }   
+        else if (dev_id == 0x36) { model_string = "MX29F022T"; }   
+        else if (dev_id == 0xA4) { model_string = "MX29F040"; }   
+        else if (dev_id == 0xD5) { model_string = "MX29F080"; }  
+        else if (dev_id == 0x57) { model_string = "MX29F200B"; }   
+        else if (dev_id == 0x51) { model_string = "MX29F200T"; }   
+        else if (dev_id == 0xAB) { model_string = "MX29F400B"; }   
+        else if (dev_id == 0x23) { model_string = "MX29F400T"; }   
+        else if (dev_id == 0x58) { model_string = "MX29F800B"; }  
+        else if (dev_id == 0xD6) { model_string = "MX29F800T"; }  
+        else if (dev_id == 0x7E) { model_string = "MX29GL Series"; }
+        else if (dev_id == 0x5A) { model_string = "MX29LV002CB"; }  
+        else if (dev_id == 0x59) { model_string = "MX29LV002CT"; }  
+        else if (dev_id == 0xB6) { model_string = "MX29LV004B"; }   
+        else if (dev_id == 0xB5) { model_string = "MX29LV004T"; }   
+        else if (dev_id == 0x37) { model_string = "MX29LV008B"; }   
+        else if (dev_id == 0x3E) { model_string = "MX29LV008T"; }   
+        else if (dev_id == 0x4F) { model_string = "MX29LV040"; }   
+        else if (dev_id == 0x38) { model_string = "MX29LV081"; }  
+        else if (dev_id == 0x7A) { model_string = "MX29LV128DB"; }  
+        else if (dev_id == 0x49) { model_string = "MX29LV160DB"; }   
+        else if (dev_id == 0xC4) { model_string = "MX29LV160DT"; }   
+        else if (dev_id == 0xA8) { model_string = "MX29LV320DB"; }   
+        else if (dev_id == 0xA7) { model_string = "MX29LV320DT"; }   
+        else if (dev_id == 0xBA) { model_string = "MX29LV400B"; }   
+        else if (dev_id == 0xB9) { model_string = "MX29LV400T"; }   
+        else if (dev_id == 0xCB) { model_string = "MX29LV640DB"; }   
+        else if (dev_id == 0xC9) { model_string = "MX29LV640DT"; }   
+        else if (dev_id == 0x5B) { model_string = "MX29LV800B"; }   
+        else if (dev_id == 0xDA) { model_string = "MX29LV800T"; }   
+        else if (dev_id == 0xF1) { model_string = "MX29SL402CB"; }  
+        else if (dev_id == 0x70) { model_string = "MX29SL402CT"; }  
+        else if (dev_id == 0x6B) { model_string = "MX29SL800CB"; }   
+        else if (dev_id == 0xEA) { model_string = "MX29SL800CT"; }   
+        else { valid = FALSE; }
+    }
+    else if (manuf_id == 0x01) {
+        valid = TRUE;
+        manuf_string = "SPANSION";
+        if      (dev_id == 0xC4) { model_string = "S29GL016"; }  
+        else if (dev_id == 0x49) { model_string = "S29GL016"; }  
+        else if (dev_id == 0x7E) { model_string = "S29GL Series"; }
+        else { valid = FALSE; }
+    }
+    else if (manuf_id == 0x20) {
+        valid = TRUE;
+        manuf_string = "ST";
+        if      (dev_id == 0xB0) { model_string = "M29F002T"; }     
+        else if (dev_id == 0xE2) { model_string = "M29F040B"; }     
+        else if (dev_id == 0xF1) { model_string = "M29F080"; }    
+        else if (dev_id == 0xD3) { model_string = "M29F200BT"; }    
+        else if (dev_id == 0xD4) { model_string = "M29F200BB"; }    
+        else if (dev_id == 0xD5) { model_string = "M29F400BT"; }     
+        else if (dev_id == 0xD6) { model_string = "M29F400BB"; }     
+        else if (dev_id == 0x58) { model_string = "M29F800DB"; }    
+        else if (dev_id == 0xEC) { model_string = "M29F800DT"; }    
+        else if (dev_id == 0x23) { model_string = "M29W010B"; }    
+        else if (dev_id == 0xE3) { model_string = "M29W040B"; }    
+        else if (dev_id == 0x27) { model_string = "M29W512B"; }    
+        else if (dev_id == 0x88) { model_string = "M28W Series"; }  
+        else if (dev_id == 0x7E) { model_string = "M29W Series"; }  
+        else if (dev_id == 0x00) { model_string = "M29W Series"; }  
+        else if (dev_id == 0x22) { model_string = "M29W Series"; }  
+        else { valid = FALSE; }
+    }
+    flash_valid = valid;
+    return valid;
+}
+
 void cart_probe_cart() {
+    
+    // Read Cartridge Header
     uint8_t *buf;
     
     buf = malloc(335);
     cart_set_gb_mode();
-    cart_gb_read_bulk(buf, 0x100, 335, FALSE);
+    cart_gb_read_bulk(buf, 0x100, 335, TRUE);
     
+    // Read various parameters
     memcpy(game_title, buf + 0x34, 11);
     game_title[11] = 0x00;
     
@@ -55,7 +356,7 @@ void cart_probe_cart() {
     if ((cart_type == 0x00) || (cart_type == 0x08)|| (cart_type == 0x09)) { mbc_type = NONE;} 
     else if ((cart_type >= 0x01) && (cart_type <= 0x03)) { mbc_type = MBC1; }
     else if ((cart_type >= 0x05) && (cart_type <= 0x06)) { mbc_type = MBC2; }
-    else if ((cart_type >= 0x0B) && (cart_type <= 0x1D)) { mbc_type = MMM01; }
+    else if ((cart_type >= 0x0B) && (cart_type <= 0x0D)) { mbc_type = MMM01; }
     else if ((cart_type >= 0x0F) && (cart_type <= 0x13)) { mbc_type = MBC3; }
     else if ((cart_type >= 0x19) && (cart_type <= 0x1E)) { mbc_type = MBC5; }
     else if ((cart_type == 0x20)) { mbc_type = MBC6; }
@@ -74,6 +375,22 @@ void cart_probe_cart() {
         (cart_type == 0x22)||
         (cart_type == 0xFF)) ? TRUE : FALSE;
         
+    const char *mbc_type_string;
+    switch (mbc_type) {
+    case NONE: mbc_type_string = "None"; break;
+    case MBC1: mbc_type_string = "MBC1"; break;
+    case MBC2: mbc_type_string = "MBC2"; break;
+    case MBC3: mbc_type_string = "MBC3"; break;
+    case MBC5: mbc_type_string = "MBC5"; break;
+    case MBC6: mbc_type_string = "MBC6"; break;
+    case MBC7: mbc_type_string = "MBC7"; break;
+    case MMM01: mbc_type_string = "MMM01"; break;
+    case POCKET_CAMERA: mbc_type_string = "Pocket Camera"; break;
+    case TAMA5: mbc_type_string = "TAMA5"; break;
+    case HUC3: mbc_type_string = "HUC1"; break;
+    case HUC1: mbc_type_string = "HUC1"; break;
+    }
+        
     rom_size = buf[0x48];
     rom_size = (rom_size > 0x50) ? (1024 + (32 << (rom_size - 0x50))) : (32 << (rom_size));
     rom_size = rom_size * 1024;
@@ -86,10 +403,49 @@ void cart_probe_cart() {
     for (size_t i = 0x34; i <= 0x4c; i++) checksum = checksum - buf[i] - 1;
     game_valid = (checksum == buf[0x4d]) ? TRUE : FALSE;
     
-    size_t length = sprintf((char *)InfoFileContent, 
-        "Game: %s\r\nROM: %dKB\r\nRAM: %dKB\r\nValid: %s\r\n", 
-        game_title, rom_size / 1024, ram_size / 1024, (game_valid == TRUE)? "Yes" : "No");
+    // Check FLASH ID
+    uint32_t seq_type = 2;
+    uint8_t manuf_id;
+    uint8_t dev_id;
+    uint8_t protect;
+    do {
+        cart_set_seq_type((seq_type_t)seq_type);
+        cart_enter_product_id_mode();
+        manuf_id = cart_gb_read(ADDR_FLASH_MANUF[seq_type], FALSE);
+        dev_id = cart_gb_read(ADDR_FLASH_ID[seq_type], FALSE);
+        protect = cart_gb_read(ADDR_FLASH_PROTECT[seq_type], FALSE);
+        cart_leave_product_id_mode();
+        seq_type ++;
+        check_flash_id(manuf_id, dev_id);
+    } while ((!check_flash_id(manuf_id, dev_id)) && (seq_type < 3));
+    seq_type --;
+    
+    is_flash_empty = FALSE;
+    if ((flash_valid)&&(!game_valid))
+    {
+        is_flash_empty = TRUE;
+        for (uint32_t i = 0; i < 335; i++) {
+            if (buf[i] != 0xFF)
+                is_flash_empty = FALSE;
+        }
+    }
+    
+    // Write into summary file
+    size_t length = sprintf(
+        (char *)info_file_content, 
+        "Please do not overwrite any file!\r\n请不要覆盖文件！\r\nGame: %s\r\nROM: %dKB\r\nRAM: %dKB\r\nMBC: %s\r\nFlash Manufacturer: %s\r\nFlash Model: %s\r\nCart Type: %s\r\nProtect: %s\r\nValid: %s\r\n", 
+        game_title, 
+        rom_size / 1024, 
+        ram_size / 1024, 
+        mbc_type_string,
+        manuf_string,
+        model_string,
+        ((flash_valid) ? ((seq_type == 0) ? "AIN Flash Cartridge" : "WR Flash Cartridge") : "Normal Cartridge"),
+        ((flash_valid) ? ((protect == 0x00) ? "No" : "Yes") : "N/A"),
+        ((game_valid == TRUE)? "Yes" : "No"));
     fat_set_filesize(FILE_NO_INFO, length);
+    
+    // Set pre-set files
     if (game_valid) {
         fat_set_filename(FILE_NO_ROM, game_title);
         fat_set_filename(FILE_NO_RAM, game_title);
@@ -106,6 +462,7 @@ void cart_probe_cart() {
     else {
         cart_set_mbc_type(MBC5); // Could be a empty flash cart
     }
+    
     free(buf);
 }
 
@@ -126,6 +483,8 @@ int main(void)
   
     //Key_GPIO_Config();
     cart_io_init();
+    cart_set_wait_mode(MODE_POLL);
+    fat_init();
     
     cart_probe_cart();
       

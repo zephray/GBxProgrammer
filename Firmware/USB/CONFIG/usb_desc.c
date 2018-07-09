@@ -26,8 +26,8 @@ const u8 MASS_DeviceDescriptor[MASS_SIZ_DEVICE_DESC] =
     0x00,   /* bDeviceSubClass */
     0x00,   /* bDeviceProtocol */
     0x40,   /* bMaxPacketSize0 0x40 = 64 */
-    0x84,   /* idVendor     (0483) */
-    0x04,
+    0xE9,   /* idVendor  */
+    0x28,
     0x22,   /* idProduct */
     0x57,
     0x00,   /* bcdDevice 2.00*/
@@ -116,9 +116,9 @@ const u8 MASS_StringProduct[MASS_SIZ_STRING_PRODUCT] =
   {
     MASS_SIZ_STRING_PRODUCT,
     0x03,
-    /* Product name: USB MSD Bootloader */
-    'U', 0, 'S', 0, 'B', 0, ' ', 0, 'M', 0, 'S', 0, 'D', 0, ' ', 0, 'B', 0, 'o', 0,
-    'o', 0, 't', 0, 'l', 0, 'o', 0, 'a', 0, 'd', 0, 'e', 0, 'r', 0,
+    /* Product name: USB MSD Programmer */
+    'U', 0, 'S', 0, 'B', 0, ' ', 0, 'M', 0, 'S', 0, 'D', 0, ' ', 0, 'P', 0, 'r', 0,
+    'o', 0, 'g', 0, 'r', 0, 'a', 0, 'm', 0, 'm', 0, 'e', 0, 'r', 0,
   };
 
 u8 MASS_StringSerial[MASS_SIZ_STRING_SERIAL] =
@@ -126,14 +126,14 @@ u8 MASS_StringSerial[MASS_SIZ_STRING_SERIAL] =
     MASS_SIZ_STRING_SERIAL,
     0x03,
     /* Serial number */
-    'S', 0, 'T', 0, 'M', 0, '3', 0, '2', 0, 'F', 0, '1', 0
+    'C', 0, 'o', 0, 'r', 0, 't', 0, 'e', 0, 'x', 0, 'M', 0
   };
 const u8 MASS_StringInterface[MASS_SIZ_STRING_INTERFACE] =
   {
     MASS_SIZ_STRING_INTERFACE,
     0x03,
-    /* Interface 0: "ST Mass" */
-    'S', 0, 'T', 0, ' ', 0, 'M', 0, 'a', 0, 's', 0, 's', 0
+    /* Interface 0: "GD Mass" */
+    'G', 0, 'D', 0, ' ', 0, 'M', 0, 'a', 0, 's', 0, 's', 0
   };
 
 /******************* (C) COPYRIGHT 2008 STMicroelectronics *****END OF FILE****/
