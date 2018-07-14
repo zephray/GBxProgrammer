@@ -430,10 +430,13 @@ void cart_probe_cart() {
         }
     }
     
+    bool cfi_valid;
+    cfi_valid = cart_gb_cfi_query();
+    
     // Write into summary file
     size_t length = sprintf(
         (char *)info_file_content, 
-        "Please do not overwrite any file!\r\n请不要覆盖文件！\r\nGame: %s\r\nROM: %dKB\r\nRAM: %dKB\r\nMBC: %s\r\nFlash Manufacturer: %s\r\nFlash Model: %s\r\nCart Type: %s\r\nProtect: %s\r\nValid: %s\r\n", 
+        "Please do not overwrite any file!\r\n请不要覆盖文件！\r\nGame: %s\r\nROM: %dKB\r\nRAM: %dKB\r\nMBC: %s\r\nFlash Manufacturer: %s\r\nFlash Model: %s\r\nCart Type: %s\r\nProtect: %s\r\nCFI Valid: %s\r\nEmpty: %s\r\nValid: %s\r\n", 
         game_title, 
         rom_size / 1024, 
         ram_size / 1024, 
@@ -442,7 +445,9 @@ void cart_probe_cart() {
         model_string,
         ((flash_valid) ? ((seq_type == 0) ? "AIN Flash Cartridge" : "WR Flash Cartridge") : "Normal Cartridge"),
         ((flash_valid) ? ((protect == 0x00) ? "No" : "Yes") : "N/A"),
-        ((game_valid == TRUE)? "Yes" : "No"));
+        ((cfi_valid)? "Yes" : "No"),
+        ((is_flash_empty) ? "Yes" : "No"),
+        ((game_valid)? "Yes" : "No"));
     fat_set_filesize(FILE_NO_INFO, length);
     
     // Set pre-set files

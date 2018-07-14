@@ -5,6 +5,9 @@
 mbc_t cart_mbc;
 seq_type_t flash_seq_type;
 wait_mode_t flash_wait_mode;
+bool cfi_valid;
+uint16_t cfi_region_blocks[4];
+uint16_t cfi_region_size[4];
 
 #define SEQ_TYPE_COUNT 3
 // AIN
@@ -42,6 +45,8 @@ const uint8_t SEQ_PRODUCT_ID_EXIT[SEQ_TYPE_COUNT][SEQ_PRODUCT_ID_EXIT_LENGTH*3] 
 const uint8_t ADDR_FLASH_MANUF[SEQ_TYPE_COUNT] = {0x00, 0x00, 0x00};
 const uint8_t ADDR_FLASH_ID[SEQ_TYPE_COUNT] = {0x01, 0x01, 0x02};
 const uint8_t ADDR_FLASH_PROTECT[SEQ_TYPE_COUNT] = {0x02, 0x02, 0x04};
+
+
 
 // GB    GBA
 // D7-0  ADDR23-16 RAM_D7-0
@@ -585,4 +590,46 @@ void cart_gb_rom_program_bulk(uint8_t *buffer, uint32_t addr, uint16_t size) {
     for (uint32_t i = 0; i < size; i++) {
         cart_program_byte(addr + i, buffer[i]);
     }
+}
+
+bool cart_gb_cfi_query() {
+    char c1, c2, c3;
+    if (flash_seq_type == TYPE_N16) {
+        cart_gb_write_flash(0x00AA, 0x98);
+    }
+    else {
+        cart_gb_write_flash(0x0055, 0x98);
+    }
+    gb_d_set_input();
+    if (flash_seq_type == TYPE_N16) {
+        c1 = cart_gb_read(0x0020, FALSE);
+        c2 = cart_gb_read(0x0022, FALSE);
+        c3 = cart_gb_read(0x0024, FALSE);
+    }
+    else {
+        c1 = cart_gb_read(0x0010, FALSE);
+        c2 = cart_gb_read(0x0011, FALSE);
+        c3 = cart_gb_read(0x0012, FALSE);
+    }
+    cfi_valid = TRUE;
+    if ((c1 != 'Q')||(c2 != 'R')||(c3 != 'Y'))
+        cfi_valid = FALSE;
+    uint8_t hb1, lb1, hb2, lb2;
+    for (uint32_t i = 0; i < 4; i++) {
+        if (flash_seq_type == TYPE_N16) {
+            lb1 = cart_gb_read(0x5A + i * 2 * 4 + 0, FALSE);
+            hb1 = cart_gb_read(0x5A + i * 2 * 4 + 2, FALSE);
+            lb2 = cart_gb_read(0x5A + i * 2 * 4 + 4, FALSE);
+            hb2 = cart_gb_read(0x5A + i * 2 * 4 + 6, FALSE);
+        }
+        else {
+            lb1 = cart_gb_read(0x2D + i * 4 + 0, FALSE);
+            hb1 = cart_gb_read(0x2D + i * 4 + 1, FALSE);
+            lb2 = cart_gb_read(0x2D + i * 4 + 2, FALSE);
+            hb2 = cart_gb_read(0x2D + i * 4 + 3, FALSE);
+        }
+        cfi_region_blocks[i] = ((uint16_t)hb1 << 8) | (lb1);
+        cfi_region_size[i] = ((uint16_t)hb2 << 8) | (lb2);
+    }
+    return cfi_valid;
 }

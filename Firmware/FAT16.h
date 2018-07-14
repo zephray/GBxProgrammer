@@ -51,7 +51,7 @@
 #define DIR_LABEL_SIZE (32)
 #define DIR_FILE_SIZE  (32 * FILE_COUNT)
 #define DIR_WRITABLE_SIZE (32 * WRITABLE_COUNT)
-#define FILE_INFO_MAX_SIZE 256
+#define FILE_INFO_MAX_SIZE 512
 
 extern uint8_t info_file_content[];
 
