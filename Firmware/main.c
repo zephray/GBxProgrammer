@@ -17,18 +17,19 @@
   * @{
   */
 
-char game_title[12];
+char game_title[17];
 uint32_t rom_size;
 uint32_t ram_size;
 const uint32_t ram_size_lut[6] = {0, 2048, 8192, 32768, 131072, 65536};
 bool game_valid;
 bool flash_valid;
-bool is_cgb_game;
+bool cfi_valid;
+bool cgb_game;
 bool has_ram;
 mbc_t mbc_type; 
 const char *manuf_string;
 const char *model_string;
-bool is_flash_empty;
+bool flash_empty;
     
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -347,10 +348,10 @@ void cart_probe_cart() {
     cart_gb_read_bulk(buf, 0x100, 335, TRUE);
     
     // Read various parameters
-    memcpy(game_title, buf + 0x34, 11);
-    game_title[11] = 0x00;
+    memcpy(game_title, buf + 0x34, 16);
+    game_title[16] = 0x00;
     
-    is_cgb_game = ((buf[0x43] == 0x80) || (buf[0x43] == 0xC0)) ? TRUE : FALSE;
+    cgb_game = ((buf[0x43] == 0x80) || (buf[0x43] == 0xC0)) ? TRUE : FALSE;
     
     uint8_t cart_type = buf[0x47];
     if ((cart_type == 0x00) || (cart_type == 0x08)|| (cart_type == 0x09)) { mbc_type = NONE;} 
@@ -372,7 +373,7 @@ void cart_probe_cart() {
         ((cart_type >= 0x12)&&(cart_type <= 0x13))||
         ((cart_type >= 0x1A)&&(cart_type <= 0x1B))||
         ((cart_type >= 0x1D)&&(cart_type <= 0x1E))||
-        (cart_type == 0x22)||
+        (cart_type == 0x22)||(cart_type == 0xFC)||
         (cart_type == 0xFF)) ? TRUE : FALSE;
         
     const char *mbc_type_string;
@@ -420,33 +421,32 @@ void cart_probe_cart() {
     } while ((!check_flash_id(manuf_id, dev_id)) && (seq_type < 3));
     seq_type --;
     
-    is_flash_empty = FALSE;
+    flash_empty = FALSE;
     if ((flash_valid)&&(!game_valid))
     {
-        is_flash_empty = TRUE;
+        flash_empty = TRUE;
         for (uint32_t i = 0; i < 335; i++) {
             if (buf[i] != 0xFF)
-                is_flash_empty = FALSE;
+                flash_empty = FALSE;
         }
     }
     
-    bool cfi_valid;
-    cfi_valid = cart_gb_cfi_query();
+    cart_gb_cfi_query();
     
     // Write into summary file
     size_t length = sprintf(
         (char *)info_file_content, 
-        "Please do not overwrite any file!\r\n请不要覆盖文件！\r\nGame: %s\r\nROM: %dKB\r\nRAM: %dKB\r\nMBC: %s\r\nFlash Manufacturer: %s\r\nFlash Model: %s\r\nCart Type: %s\r\nProtect: %s\r\nCFI Valid: %s\r\nEmpty: %s\r\nValid: %s\r\n", 
+        "**GBxProgrammer V0.9.0**\r\nPlease do not overwrite any file!\r\n请不要覆盖文件！\r\nGame: %s\r\nROM: %dKB\r\nRAM: %dKB\r\nMBC: %s\r\nFlash Manufacturer: %s\r\nFlash Model: %s\r\nCart Type: %s\r\nProtect: %s\r\nCFI Valid: %s\r\nEmpty: %s\r\nGame Valid: %s\r\n", 
         game_title, 
         rom_size / 1024, 
         ram_size / 1024, 
         mbc_type_string,
         manuf_string,
         model_string,
-        ((flash_valid) ? ((seq_type == 0) ? "AIN Flash Cartridge" : "WR Flash Cartridge") : "Normal Cartridge"),
+        ((flash_valid) ? ((seq_type == 0) ? "AIN Flash Cartridge" : "WR Flash Cartridge") : ((flash_empty) ? "Bad or No Cartridge" : "Normal Cartridge")),
         ((flash_valid) ? ((protect == 0x00) ? "No" : "Yes") : "N/A"),
         ((cfi_valid)? "Yes" : "No"),
-        ((is_flash_empty) ? "Yes" : "No"),
+        ((flash_empty) ? "Yes" : "No"),
         ((game_valid)? "Yes" : "No"));
     fat_set_filesize(FILE_NO_INFO, length);
     
@@ -456,11 +456,11 @@ void cart_probe_cart() {
         fat_set_filename(FILE_NO_RAM, game_title);
         fat_set_filesize(FILE_NO_ROM, rom_size);
         fat_set_filesize(FILE_NO_RAM, ram_size);
-        if (is_cgb_game) {
+        if (cgb_game) {
             fat_set_fileext(FILE_NO_ROM, "GBC");
         }
         else {
-            fat_set_fileext(FILE_NO_ROM, "GB");
+            fat_set_fileext(FILE_NO_ROM, "GB ");
         }
         cart_set_mbc_type(mbc_type);
     }
@@ -491,8 +491,16 @@ int main(void)
     cart_set_wait_mode(MODE_POLL);
     fat_init();
     
+    // First Probe
     cart_probe_cart();
-      
+    // If failed, try if it is a GameBoy Camera!
+    if ((!game_valid)&&(!flash_valid)) {
+        cart_allow_ain_clock(TRUE);
+        cart_probe_cart();
+        if (mbc_type != POCKET_CAMERA)
+            cart_allow_ain_clock(FALSE);
+    } 
+    
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
     USB_Interrupts_Config();
     Set_USBClock();

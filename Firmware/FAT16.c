@@ -91,16 +91,21 @@ uint8_t dir_sector_file[DIR_FILE_SIZE]=
 
 uint8_t dir_sector_free[DIR_WRITABLE_SIZE];
 
-bool is_writing_rom = TRUE;
-bool is_writing_valid = FALSE;
+bool writing_rom = TRUE;
+bool writing_valid = FALSE;
 uint16_t writing_start_cluster;
-extern bool is_flash_empty;
+extern bool flash_empty;
+extern bool cfi_valid;
+extern bool game_valid;
+extern bool flash_valid;
+extern uint32_t rom_size;
+extern uint32_t ram_size;
 
 uint8_t info_file_content[FILE_INFO_MAX_SIZE];
 
 void fat_init() {
     memset(dir_sector_free, DIR_WRITABLE_SIZE, 0x00);
-    is_writing_valid = FALSE;
+    writing_valid = FALSE;
 }
 
 void fat_set_filesize(uint32_t file_no, uint32_t file_size) {
@@ -139,6 +144,7 @@ uint32_t fat_read_lba(uint32_t lba, uint8_t* data)
     }
     else if (lba >= FILEDATA_START_SECTOR(RAM_FILE_START_CLUSTER)) {
         target = lba - FILEDATA_START_SECTOR(RAM_FILE_START_CLUSTER);
+        cart_gb_ram_read_bulk(data, target * BYTES_PER_SECTOR, BYTES_PER_SECTOR);
     }
     else if (lba >= FILEDATA_START_SECTOR(ROM_FILE_START_CLUSTER)) {
         target = lba - FILEDATA_START_SECTOR(ROM_FILE_START_CLUSTER);
@@ -240,9 +246,12 @@ uint32_t fat_write_lba(uint32_t lba, uint8_t* data)
     
     if (lba >= FILEDATA_START_SECTOR(USER_FILE_START_CLUSTER)) {
         //target = lba - FILEDATA_START_SECTOR(USER_FILE_START_CLUSTER);
-        if ((is_writing_valid)&&(lba >= FILEDATA_START_SECTOR(writing_start_cluster))) {
+        if ((writing_valid)&&(lba >= FILEDATA_START_SECTOR(writing_start_cluster))) {
             target = lba - FILEDATA_START_SECTOR(writing_start_cluster);
-            cart_gb_rom_program_bulk(data, target * BYTES_PER_SECTOR, BYTES_PER_SECTOR);
+            if (writing_rom)
+                cart_gb_rom_program_bulk(data, target * BYTES_PER_SECTOR, BYTES_PER_SECTOR, !flash_empty);
+            else
+                cart_gb_ram_write_bulk(data, target * BYTES_PER_SECTOR, BYTES_PER_SECTOR);
         }
     }
     else if (lba >= FILEDATA_START_SECTOR(INFO_FILE_START_CLUSTER)) {
@@ -252,25 +261,47 @@ uint32_t fat_write_lba(uint32_t lba, uint8_t* data)
     else if (lba >= ROOT_ENTRY_SECTOR) {
         target = lba - ROOT_ENTRY_SECTOR;
         if (target == 0) {
+            // Old files might get deleted
+            memcpy(dir_sector_file, data + DIR_LABEL_SIZE, DIR_FILE_SIZE);
+            if ((*(dir_sector_file + 1 * 32) == 0xE5)&&(rom_size != 0)) {
+                // ROM file get deleted, issue a full cart erase.
+                cart_erase_flash();
+                flash_empty = TRUE;
+            }
+            if ((*(dir_sector_file + 2 * 32) == 0xE5)&&(ram_size != 0)) {
+                // RAM¡¡file get deleted, fill the RAM with 0xFF
+                uint8_t *empty;
+                empty = malloc(1024);
+                memset(empty, 1024, 0xFF);
+                for (uint32_t i = 0; i < (ram_size / 1024); i++) {
+                    cart_gb_ram_write_bulk(empty, i * 1024, 1024);
+                }
+            }
+            
+            // Process new files
             memcpy(dir_sector_free, data + DIR_LABEL_SIZE + DIR_FILE_SIZE, DIR_WRITABLE_SIZE);
             // Scan the written data
-            is_writing_valid = FALSE;
+            writing_valid = FALSE;
             for (uint32_t i = 0; i < WRITABLE_COUNT; i++) {
                 if (dir_sector_free[i * 32 + 0x0B] != 0x0F) {
                     // this is not a LFN entry
                     if (memcmp(dir_sector_free + i * 32 + 8, "GB", 2) == 0) {
-                        is_writing_valid = TRUE;
-                        is_writing_rom = TRUE;
+                        writing_valid = TRUE;
+                        writing_rom = TRUE;
                         writing_start_cluster = (uint16_t)dir_sector_free[i * 32 + 27] << 8;
                         writing_start_cluster |=  dir_sector_free[i * 32 + 26];
-                        if (!is_flash_empty) {
+                        if ((!cfi_valid)&&(!flash_valid)&&(!game_valid)) {
+                            // This means there was probably no cartridge when powered on, try to re-detect
+                            cart_probe_cart();
+                        }
+                        if ((!cfi_valid)&&(!flash_empty)) {
                             cart_erase_flash();
-                            is_flash_empty = TRUE;
+                            flash_empty = TRUE;
                         }
                     }
                     else if (memcmp(dir_sector_free + i * 32 + 8, "SAV", 3) == 0) {
-                        is_writing_valid = TRUE;
-                        is_writing_rom = FALSE;
+                        writing_valid = TRUE;
+                        writing_rom = FALSE;
                         writing_start_cluster = (uint16_t)dir_sector_free[i * 32 + 27] << 8;
                         writing_start_cluster |=  dir_sector_free[i * 32 + 26];
                     }

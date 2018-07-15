@@ -5,9 +5,10 @@
 mbc_t cart_mbc;
 seq_type_t flash_seq_type;
 wait_mode_t flash_wait_mode;
-bool cfi_valid;
+extern bool cfi_valid;
 uint16_t cfi_region_blocks[4];
 uint16_t cfi_region_size[4];
+bool use_ain_clock;
 
 #define SEQ_TYPE_COUNT 3
 // AIN
@@ -28,6 +29,13 @@ const uint8_t SEQ_CHIP_ERASE[SEQ_TYPE_COUNT][SEQ_CHIP_ERASE_LENGTH*3] = {
 	{0x0a, 0xaa, 0xaa, 0x05, 0x55, 0x55, 0x0a, 0xaa, 0x80, 0x0a, 0xaa, 0xaa, 0x05, 0x55, 0x55, 0x0a, 0xaa, 0x10}
 };
 
+#define SEQ_SECTOR_ERASE_LENGTH 5
+const uint8_t SEQ_SECTOR_ERASE[SEQ_TYPE_COUNT][SEQ_CHIP_ERASE_LENGTH*3] = {
+	{0x55, 0x55, 0xaa, 0x2a, 0xaa, 0x55, 0x55, 0x55, 0x80, 0x55, 0x55, 0xaa, 0x2a, 0xaa, 0x55},
+    {0x05, 0x55, 0xaa, 0x02, 0xaa, 0x55, 0x05, 0x55, 0x80, 0x05, 0x55, 0xaa, 0x02, 0xaa, 0x55},
+	{0x0a, 0xaa, 0xaa, 0x05, 0x55, 0x55, 0x0a, 0xaa, 0x80, 0x0a, 0xaa, 0xaa, 0x05, 0x55, 0x55}
+};
+
 #define SEQ_PRODUCT_ID_LENGTH 3
 const uint8_t SEQ_PRODUCT_ID[SEQ_TYPE_COUNT][SEQ_PRODUCT_ID_LENGTH*3] = {
 	{0x55, 0x55, 0xaa, 0x2a, 0xaa, 0x55, 0x55, 0x55, 0x90},
@@ -46,7 +54,7 @@ const uint8_t ADDR_FLASH_MANUF[SEQ_TYPE_COUNT] = {0x00, 0x00, 0x00};
 const uint8_t ADDR_FLASH_ID[SEQ_TYPE_COUNT] = {0x01, 0x01, 0x02};
 const uint8_t ADDR_FLASH_PROTECT[SEQ_TYPE_COUNT] = {0x02, 0x02, 0x04};
 
-
+bool is_d_output;
 
 // GB    GBA
 // D7-0  ADDR23-16 RAM_D7-0
@@ -122,27 +130,35 @@ __attribute__((always_inline)) inline void gb_a_write(uint16_t addr) {
     GPIO_Write(GPIOB, addr);
 }
 
-__attribute__((always_inline)) inline void gb_d_set_input(void) {
-    GPIO_InitTypeDef GPIO_InitStructure;
+void gb_d_set_input(void) {
+    if (is_d_output) {
+        GPIO_InitTypeDef GPIO_InitStructure;
 
-    GPIO_InitStructure.GPIO_Pin = 0xFF; // GPIO0-7
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_InitStructure.GPIO_Pin = 0xFF; // GPIO0-7
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
 
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
-    
-    GPIO_ResetBits(CART_GB_D_DIR_PORT, CART_GB_D_DIR_PIN);
+        GPIO_Init(GPIOA, &GPIO_InitStructure);
+        
+        GPIO_ResetBits(CART_GB_D_DIR_PORT, CART_GB_D_DIR_PIN);
+        
+        is_d_output = FALSE;
+    }
 }
 
-__attribute__((always_inline)) inline void gb_d_set_output(void) {
-    GPIO_SetBits(CART_GB_D_DIR_PORT, CART_GB_D_DIR_PIN);
-    GPIO_InitTypeDef GPIO_InitStructure;
+void gb_d_set_output(void) {
+    if (!is_d_output) {
+        GPIO_SetBits(CART_GB_D_DIR_PORT, CART_GB_D_DIR_PIN);
+        GPIO_InitTypeDef GPIO_InitStructure;
 
-    GPIO_InitStructure.GPIO_Pin = 0xFF; // GPIO0-7
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+        GPIO_InitStructure.GPIO_Pin = 0xFF; // GPIO0-7
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
 
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
+        GPIO_Init(GPIOA, &GPIO_InitStructure);
+        
+        is_d_output = TRUE;
+    }
 }
 
 __attribute__((always_inline)) inline uint8_t gb_d_read(void) {
@@ -211,6 +227,15 @@ void cart_io_init(void) {
     // Initialize Address Pins
     GPIO_InitStructure.GPIO_Pin = 0xFFFF;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
+    
+    is_d_output = TRUE;
+    gb_d_set_input();
+    
+    use_ain_clock = FALSE;
+}
+
+void cart_allow_ain_clock(bool new_setting) {
+    use_ain_clock = new_setting;
 }
 
 void cart_set_mbc_type(mbc_t new_type) {
@@ -236,11 +261,13 @@ void cart_set_gb_mode(void) {
 uint8_t cart_gb_read(uint16_t addr, bool ram_access) {
     gb_a_write(addr);
     if (ram_access) gb_cs_low();
+    if (use_ain_clock) gb_ain_irq_low();
     gb_rd_low();
     gb_delay();
     uint8_t data = gb_d_read();
     gb_rd_high();
     if (ram_access) gb_cs_high();
+    if (use_ain_clock) gb_ain_irq_high();
     return data;
 }
 
@@ -257,10 +284,12 @@ void cart_gb_write(uint16_t addr, uint8_t data, bool ram_access) {
     gb_a_write(addr);
     gb_d_write(data);
     if (ram_access) gb_cs_low();
+    if (use_ain_clock) gb_ain_irq_low();
     gb_wr_low();
     gb_delay();
     gb_wr_high();
     if (ram_access) gb_cs_high();
+    if (use_ain_clock) gb_ain_irq_high();
 }
 
 void cart_gb_write_ain(uint16_t addr, uint8_t data) {
@@ -273,19 +302,25 @@ void cart_gb_write_ain(uint16_t addr, uint8_t data) {
 }
 
 void cart_gb_write_flash(uint16_t addr, uint8_t data) {
-    if (flash_seq_type == TYPE_AIN) {
-        cart_gb_write_ain(addr, data);
-    }
-    else {
-        cart_gb_write(addr, data, FALSE);
-    }
+    gb_d_set_output();
+    gb_a_write(addr);
+    gb_d_write(data);
+    if (flash_seq_type == TYPE_AIN) { gb_ain_irq_low(); } else { gb_wr_low(); }
+    asm("nop");
+    if (flash_seq_type == TYPE_AIN) { gb_ain_irq_high(); } else { gb_wr_high(); }
 }
 
 // More application specific function calls
 void cart_gb_read_bulk(uint8_t *buffer, uint16_t addr, uint16_t size, bool ram_access) {
-  for (size_t i = 0; i < size; i++) {
-    buffer[i] = cart_gb_read(addr + i, ram_access);
-  }
+    for (size_t i = 0; i < size; i++) {
+        buffer[i] = cart_gb_read(addr + i, ram_access);
+    }
+}
+
+void cart_gb_write_bulk(uint8_t *buffer, uint16_t addr, uint16_t size, bool ram_access) {
+    for (size_t i = 0; i < size; i++) {
+        cart_gb_write(addr + i, buffer[i], ram_access);
+    }
 }
 
 void cart_gb_enable_sram(void) {
@@ -325,6 +360,25 @@ void cart_gb_rom_read_bulk(uint8_t *buffer, uint32_t addr, uint16_t size) {
             cart_gb_read_bulk(buffer, 0x4000 | addr & 0x3fff, size, FALSE);
         }
     }
+}
+
+void cart_gb_ram_read_bulk(uint8_t *buffer, uint32_t addr, uint16_t size) {
+    // it has to be aligned.
+    cart_gb_set_mbc1_model(MODEL_RAM);
+    cart_gb_enable_sram();
+    cart_gb_switch_ram_bank(addr / 0x2000);
+    gb_d_set_input();
+    cart_gb_read_bulk(buffer, (0xA000 | (addr % 0x2000)), size, TRUE);
+    cart_gb_disable_sram();
+}
+
+void cart_gb_ram_write_bulk(uint8_t *buffer, uint32_t addr, uint16_t size) {
+    // it has to be aligned.
+    cart_gb_set_mbc1_model(MODEL_RAM);
+    cart_gb_enable_sram();
+    cart_gb_switch_ram_bank(addr / 0x2000);
+    cart_gb_write_bulk(buffer, (0xA000 | (addr % 0x2000)), size, TRUE);
+    cart_gb_disable_sram();
 }
 
 #ifdef HW_R2
@@ -496,15 +550,15 @@ void cart_wait_flash(wait_opt_t option, uint8_t dat) {
         t = dat & 0x80;
         timeout = PRGM_TIMEOUT;
         do {
-            gb_delay();
+            asm("nop");
             if (option == OPT_PROGRAM) timeout --;
         } while (((cart_gb_read_bus() & 0x80) != t)&&(timeout != 0));
         break;
     case MODE_TOGGLE:
         do {
-            gb_delay();
+            asm("nop");
             t = cart_gb_read_bus();
-            gb_delay();
+            asm("nop");
         } while (t != (cart_gb_read_bus() & 0x40));
         break;
     case MODE_DEFAULT:
@@ -531,6 +585,30 @@ void cart_erase_flash() {
             SEQ_CHIP_ERASE[flash_seq_type][i*3+2]);
     }
     cart_wait_flash(OPT_ERASE, 0xFF);
+    gb_d_set_output(); //Ignite the LED
+}
+
+void cart_erase_sector(uint32_t addr) {
+    if (flash_seq_type == TYPE_AIN)
+        cart_gb_switch_rom_bank(0x001);
+    else
+        if (addr > 0x3fff)
+            cart_gb_switch_rom_bank(addr >> 14);
+    if (flash_seq_type == TYPE_AIN)
+        cart_gb_switch_rom_bank(0x001);
+    for (uint32_t i = 0; i < SEQ_SECTOR_ERASE_LENGTH; i++) {
+        cart_gb_write_flash(
+            ((uint16_t)SEQ_SECTOR_ERASE[flash_seq_type][i*3+0] << 8) | (uint16_t)SEQ_SECTOR_ERASE[flash_seq_type][i*3+1],
+            SEQ_SECTOR_ERASE[flash_seq_type][i*3+2]);
+    }
+    if (flash_seq_type == TYPE_AIN)
+        if (addr > 0x3fff)
+            cart_gb_switch_rom_bank(addr >> 14);
+    if (addr > 0x3fff)
+        cart_gb_write_flash(0x4000 | addr & 0x3fff, 0x30);
+    else
+        cart_gb_write_flash(addr, 0x30);
+    cart_wait_flash(OPT_ERASE, 0xFF);
 }
 
 void cart_program_byte(uint32_t addr, uint8_t dat) {
@@ -555,13 +633,11 @@ void cart_program_byte(uint32_t addr, uint8_t dat) {
     else
         cart_gb_write_flash(addr, dat);
     
-    // Various mbc setting might have been changed, set back?
-    //cart_gb_set_mbc1_model(MODEL_16_8);
-    //if (addr > 0x3fff)
-    //    cart_gb_switch_rom_bank(addr >> 14);
-    
     // Wait write process to finish
     cart_wait_flash(OPT_PROGRAM, dat);
+    
+    // Various mbc setting might have been changed, set back?
+    cart_gb_set_mbc1_model(MODEL_ROM);
 }
 
 void cart_enter_product_id_mode() {
@@ -586,7 +662,23 @@ void cart_leave_product_id_mode() {
     gb_d_set_input();
 }
 
-void cart_gb_rom_program_bulk(uint8_t *buffer, uint32_t addr, uint16_t size) {
+void cart_gb_rom_program_bulk(uint8_t *buffer, uint32_t addr, uint16_t size, bool erase) {
+    //check if this is the bulk in a HW sector
+    if (erase) {
+        uint32_t addr_before = 0;
+        uint32_t addr_after = 0;
+        for (uint32_t i = 0; i < 4; i++) {
+            addr_after = addr_before + (cfi_region_blocks[i] + 1) * (cfi_region_size[i] * 256);
+            if (addr < addr_before) {
+                break;
+            }
+            else if ((addr < addr_after)&&(((addr - addr_before) % (cfi_region_size[i] * 256)) == 0)) {
+                cart_erase_sector(addr);
+                break;
+            }
+            addr_before = addr_after;
+        }
+    }
     for (uint32_t i = 0; i < size; i++) {
         cart_program_byte(addr + i, buffer[i]);
     }
@@ -631,5 +723,7 @@ bool cart_gb_cfi_query() {
         cfi_region_blocks[i] = ((uint16_t)hb1 << 8) | (lb1);
         cfi_region_size[i] = ((uint16_t)hb2 << 8) | (lb2);
     }
+    cart_gb_write_flash(0x0000, 0xF0);
+    gb_d_set_input();
     return cfi_valid;
 }

@@ -27,7 +27,7 @@
 #define CART_GB_D_DIR_PORT      GPIOC
 #define CART_GB_D_DIR_PIN       GPIO_Pin_14
 
-#define PRGM_TIMEOUT 10000
+#define PRGM_TIMEOUT 5000
 #define DEF_PRGM_DELAY 55
 #define DEF_ERASE_DELAY 5000
 #define LONG_PRGM_DELAY 110
@@ -77,8 +77,8 @@ typedef enum wait_mode {
 } wait_mode_t;
 
 typedef enum mbc1_model {
-    MODEL_16_8 = 0,
-    MODEL_4_32 = 1
+    MODEL_ROM = 0,
+    MODEL_RAM = 1
 } mbc1_model_t;
 
 typedef enum wait_opt {
@@ -94,12 +94,15 @@ void gb_delay(void);
 void cart_reset(void);
 void cart_io_init(void);
 void cart_set_mbc_type(mbc_t new_type);
+void cart_allow_ain_clock(bool new_setting);
 // GameBoy related functions
 void cart_set_gb_mode(void);
 uint8_t cart_gb_read(uint16_t addr, bool ram_access);
 void cart_gb_write(uint16_t addr, uint8_t data, bool ram_access);
 void cart_gb_read_bulk(uint8_t *buffer, uint16_t addr, uint16_t size, bool ram_access);
 void cart_gb_rom_read_bulk(uint8_t *buffer, uint32_t addr, uint16_t size);
+void cart_gb_ram_read_bulk(uint8_t *buffer, uint32_t addr, uint16_t size);
+void cart_gb_ram_write_bulk(uint8_t *buffer, uint32_t addr, uint16_t size);
 #ifdef HW_R2
 void cart_set_gba_mode(void);
 uint16_t cart_gba_read(uint32_t addr);
@@ -116,6 +119,7 @@ void cart_erase_flash();
 void cart_program_byte(uint32_t addr, uint8_t dat);
 void cart_enter_product_id_mode();
 void cart_leave_product_id_mode();
-void cart_gb_rom_program_bulk(uint8_t *buffer, uint32_t addr, uint16_t size);
+bool cart_gb_cfi_query();
+void cart_gb_rom_program_bulk(uint8_t *buffer, uint32_t addr, uint16_t size, bool erase);
 
 #endif

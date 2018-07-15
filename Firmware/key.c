@@ -18,7 +18,7 @@ u8 Key_Scan(GPIO_TypeDef* GPIOx,u16 GPIO_Pin)
 {	
    if(GPIO_ReadInputDataBit(GPIOx,GPIO_Pin) == 0 ) 
   {	   
-    Delayms(10);
+    delay_ms(10);
     if(GPIO_ReadInputDataBit(GPIOx,GPIO_Pin) == 0 )  
     {	 
 	return KEY_ON;	 
