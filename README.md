@@ -2,6 +2,13 @@
 
 Game Boy Cartridge Programmer. Works with Microsoft(R) Windows(R) and Linux operating system.
 
+# Features
+
+* Dump (Backup) games ROM to your PC
+* Backup save data to your PC
+* Restore save data to game cartridge
+* Write ROMs to supported Flash carts
+
 # Compatibilty
 
 The programmer should be able to support ROM and RAM readout on all MBC1-5 cartridges and GameBoy Camera. The reprogramming function should work with majority flash carts, but it has not been widely tested. It supports these 3 common wiring diagrams with or without an MBC:
@@ -11,6 +18,15 @@ The programmer should be able to support ROM and RAM readout on all MBC1-5 cartr
 * 16-bit NOR Flash under 8-bit mode with write enable connected to WR
 
 Due to the nature of FAT filesystem emulation, there is no guarentee that it would work under all OSes. Ubuntu 16.04 LTS and Windows 7 are tested to be working. Please be aware that many linux distros have writing cache for external devices default enabled (which does not make sense for a programmer), you probably want to use 'sync' manually to ensure data has been written to the device.
+
+# Speed
+
+This should beat all other programmers. (Though probably not important)
+
+* 1 MByte ROM Read: 3.9s
+* 32 KByte SRAM Read or Write: 1s
+* 32 KByte Flash Cart Write: 3s
+* 1 MByte Flash Cart Write: 39s
 
 # Usage
 
