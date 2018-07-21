@@ -38,20 +38,31 @@
 
 #define INFO_FILE_START_CLUSTER  2  // First avaliable cluster
 #define ROM_FILE_START_CLUSTER   CLUSTERS_IN_A_FAT_SECTOR // Info file should only occupy 1 cluster, but things are better to be 8MB aligned
+#define SLOT0_FILE_START_CLUSTER (ROM_FILE_START_CLUSTER + (1*1024*1024 / BYTES_PER_CLUSTER))
+#define SLOT1_FILE_START_CLUSTER (ROM_FILE_START_CLUSTER + (2*1024*1024 / BYTES_PER_CLUSTER))
+#define SLOT2_FILE_START_CLUSTER (ROM_FILE_START_CLUSTER + (4*1024*1024 / BYTES_PER_CLUSTER))
+#define SLOT3_FILE_START_CLUSTER (ROM_FILE_START_CLUSTER + (6*1024*1024 / BYTES_PER_CLUSTER))
 #define RAM_FILE_START_CLUSTER   (ROM_FILE_START_CLUSTER + (32*1024*1024 / BYTES_PER_CLUSTER)) // ROM file can be as large as 32MB, that's the largest possible value
+#define SAVE0_FILE_START_CLUSTER (RAM_FILE_START_CLUSTER)
+#define SAVE1_FILE_START_CLUSTER (RAM_FILE_START_CLUSTER + (1*32*1024 / BYTES_PER_CLUSTER))
+#define SAVE2_FILE_START_CLUSTER (RAM_FILE_START_CLUSTER + (2*32*1024 / BYTES_PER_CLUSTER))
+#define SAVE3_FILE_START_CLUSTER (RAM_FILE_START_CLUSTER + (3*32*1024 / BYTES_PER_CLUSTER))
 #define USER_FILE_START_CLUSTER  (RAM_FILE_START_CLUSTER + (8*1024*1024 / BYTES_PER_CLUSTER))  // Allocate 8 MB for RAM file
 
 // Files in the root folder
 #define FILE_NO_INFO    0
 #define FILE_NO_ROM     1
 #define FILE_NO_RAM     2
-#define FILE_COUNT      3
-#define WRITABLE_COUNT  8  // Reserve more for LFN entries writen by the OS
+#define FILE_NO_ROM_SLOT(x) (3+x)
+#define FILE_NO_RAM_SLOT(x) ((x == 0) ? (2) : (7+x))
+#define FILE_COUNT      10  // 3 default + 4 multicart + 3 ram muliticart
+#define WRITABLE_COUNT  8   // Reserve more for LFN entries writen by the OS
            
 #define DIR_LABEL_SIZE (32)
 #define DIR_FILE_SIZE  (32 * FILE_COUNT)
+#define DIR_FILE_ATTR  ((8+3+6) * FILE_COUNT)
 #define DIR_WRITABLE_SIZE (32 * WRITABLE_COUNT)
-#define FILE_INFO_MAX_SIZE 384
+#define FILE_INFO_MAX_SIZE 256
 
 extern uint8_t info_file_content[];
 

@@ -17,19 +17,23 @@
   * @{
   */
 
-char game_title[17];
-uint32_t rom_size;
-uint32_t ram_size;
+char game_title[4][17];
+uint32_t rom_size[4];
+uint32_t ram_size[4];
 const uint32_t ram_size_lut[6] = {0, 2048, 8192, 32768, 131072, 65536};
-bool game_valid;
+bool game_valid[4];
 bool flash_valid;
 bool cfi_valid;
-bool cgb_game;
+bool cgb_game[4];
 bool has_ram;
 mbc_t mbc_type; 
 const char *manuf_string;
 const char *model_string;
 bool flash_empty;
+bool multicart_mode;
+char manuf_id_string[5];
+char dev_id_string[5];
+const uint32_t addr_lut[4] = {1*1048576, 2*1048576, 4*1048576, 6*1048576};
     
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -45,8 +49,10 @@ bool flash_empty;
 
 bool check_flash_id(uint8_t manuf_id, uint8_t dev_id) {
     bool valid = FALSE;
-    manuf_string = "Unknown";
-    model_string = "Unknown";
+    manuf_string = manuf_id_string;
+    model_string = dev_id_string;
+    sprintf(manuf_id_string, "0x%2X", manuf_id);
+    sprintf(dev_id_string, "0x%2X", dev_id);
     if (manuf_id == 0x52) {
         valid = TRUE;
         manuf_string = "Alliance";
@@ -345,13 +351,13 @@ void cart_probe_cart() {
     
     buf = malloc(335);
     cart_set_gb_mode();
-    cart_gb_read_bulk(buf, 0x100, 335, TRUE);
+    cart_gb_read_bulk(buf, 0x100, 335, FALSE);
     
     // Read various parameters
-    memcpy(game_title, buf + 0x34, 16);
-    game_title[16] = 0x00;
+    memcpy(game_title[0], buf + 0x34, 16);
+    game_title[0][16] = 0x00;
     
-    cgb_game = ((buf[0x43] == 0x80) || (buf[0x43] == 0xC0)) ? TRUE : FALSE;
+    cgb_game[0] = ((buf[0x43] == 0x80) || (buf[0x43] == 0xC0)) ? TRUE : FALSE;
     
     uint8_t cart_type = buf[0x47];
     if ((cart_type == 0x00) || (cart_type == 0x08)|| (cart_type == 0x09)) { mbc_type = NONE;} 
@@ -392,17 +398,17 @@ void cart_probe_cart() {
     case HUC1: mbc_type_string = "HUC1"; break;
     }
         
-    rom_size = buf[0x48];
-    rom_size = (rom_size > 0x50) ? (1024 + (32 << (rom_size - 0x50))) : (32 << (rom_size));
-    rom_size = rom_size * 1024;
-    ram_size = buf[0x49];
-    ram_size = (ram_size < 6) ? ram_size_lut[ram_size] : 0;
-    if (!has_ram) ram_size = 0;
-    if (mbc_type == 2) ram_size = 256; // MBC2 has internal 256B RAM. 
+    rom_size[0] = buf[0x48];
+    rom_size[0] = (rom_size[0] > 0x50) ? (1024 + (32 << (rom_size[0] - 0x50))) : (32 << (rom_size[0]));
+    rom_size[0] = rom_size[0] * 1024;
+    ram_size[0] = buf[0x49];
+    ram_size[0] = (ram_size[0] < 6) ? ram_size_lut[ram_size[0]] : 0;
+    if (!has_ram) ram_size[0] = 0;
+    if (mbc_type == 2) ram_size[0] = 256; // MBC2 has internal 256B RAM. 
     
     uint8_t checksum = 0;
     for (size_t i = 0x34; i <= 0x4c; i++) checksum = checksum - buf[i] - 1;
-    game_valid = (checksum == buf[0x4d]) ? TRUE : FALSE;
+    game_valid[0] = (checksum == buf[0x4d]) ? TRUE : FALSE;
     
     // Check FLASH ID
     uint32_t seq_type = 2;
@@ -418,11 +424,14 @@ void cart_probe_cart() {
         cart_leave_product_id_mode();
         seq_type ++;
         check_flash_id(manuf_id, dev_id);
-    } while ((!check_flash_id(manuf_id, dev_id)) && (seq_type < 3));
+        cart_gb_cfi_query();
+        flash_valid |= cfi_valid;
+    } while ((!flash_valid) && (seq_type < 3));
     seq_type --;
     
     flash_empty = FALSE;
-    if ((flash_valid)&&(!game_valid))
+    cart_gb_cfi_query(); // check again
+    if ((flash_valid)&&(!game_valid[0]))
     {
         flash_empty = TRUE;
         for (uint32_t i = 0; i < 335; i++) {
@@ -431,41 +440,91 @@ void cart_probe_cart() {
         }
     }
     
-    cart_gb_cfi_query();
-    
-    // Write into summary file
-    size_t length = sprintf(
-        (char *)info_file_content, 
-        "**GBxProgrammer V0.9.0**\r\nPlease do not overwrite any file!\r\n请不要覆盖文件！\r\nGame: %s\r\nROM: %dKB\r\nRAM: %dKB\r\nMBC: %s\r\nFlash Manufacturer: %s\r\nFlash Model: %s\r\nCart Type: %s\r\nProtect: %s\r\nCFI Valid: %s\r\nEmpty: %s\r\nGame Valid: %s\r\n", 
-        game_title, 
-        rom_size / 1024, 
-        ram_size / 1024, 
-        mbc_type_string,
-        manuf_string,
-        model_string,
-        ((flash_valid) ? ((seq_type == 0) ? "AIN Flash Cartridge" : "WR Flash Cartridge") : ((flash_empty) ? "Bad or No Cartridge" : "Normal Cartridge")),
-        ((flash_valid) ? ((protect == 0x00) ? "No" : "Yes") : "N/A"),
-        ((cfi_valid)? "Yes" : "No"),
-        ((flash_empty) ? "Yes" : "No"),
-        ((game_valid)? "Yes" : "No"));
-    fat_set_filesize(FILE_NO_INFO, length);
-    
-    // Set pre-set files
-    if (game_valid) {
-        fat_set_filename(FILE_NO_ROM, game_title);
-        fat_set_filename(FILE_NO_RAM, game_title);
-        fat_set_filesize(FILE_NO_ROM, rom_size);
-        fat_set_filesize(FILE_NO_RAM, ram_size);
-        if (cgb_game) {
-            fat_set_fileext(FILE_NO_ROM, "GBC");
+    if (memcmp(game_title, "MULTICARTLDR", 12) == 0)
+    {
+        multicart_mode = TRUE;
+        cart_set_mbc_type(MBC5);
+        fat_set_filename(FILE_NO_RAM_SLOT(0), "SLOT1");
+        for (uint32_t i = 0; i < 4; i++) {
+            cart_gb_rom_read_bulk(buf, addr_lut[i] + 0x100, 335);
+            memcpy(game_title[i], buf + 0x34, 16);
+            game_title[i][16] = 0x00;
+            rom_size[i] = buf[0x48];
+            rom_size[i] = (rom_size[i] > 0x50) ? (1024 + (32 << (rom_size[i] - 0x50))) : (32 << (rom_size[i]));
+            rom_size[i] = rom_size[i] * 1024;
+            ram_size[i] = buf[0x49];
+            ram_size[i] = (ram_size[i] < 6) ? ram_size_lut[ram_size[i]] : 0;
+            if (!has_ram) ram_size[i] = 0;
+            uint8_t cart_type = buf[0x47];
+            if ((cart_type == 0x05) || (cart_type == 0x06)) ram_size[i] = 256; // MBC2 has internal 256B RAM. 
+            cgb_game[i] = ((buf[0x43] == 0x80) || (buf[0x43] == 0xC0)) ? TRUE : FALSE;
+            uint8_t checksum = 0;
+            for (size_t i = 0x34; i <= 0x4c; i++) checksum = checksum - buf[i] - 1;
+            game_valid[i] = (checksum == buf[0x4d]) ? TRUE : FALSE;
+            
+            if (game_valid[i]) {
+                fat_set_filesize(FILE_NO_ROM_SLOT(i), rom_size[i]);
+                fat_set_filesize(FILE_NO_RAM_SLOT(i), ram_size[i]);
+                if (cgb_game[i]) {
+                    fat_set_fileext(FILE_NO_ROM_SLOT(i), "GBC");
+                }
+                else {
+                    fat_set_fileext(FILE_NO_ROM_SLOT(i), "GB ");
+                }
+            }
+            
+            size_t length = sprintf(
+                (char *)info_file_content, 
+                "MultiCart Mode\r\nGame1: %s \r\nGame2: %s \r\nGame3: %s \r\nGame4: %s \r\nFlash Manufacturer: %s\r\nFlash Model: %s\r\nCart Type: %s\r\nFlash Valid: %s\r\n", 
+                game_title[0], 
+                game_title[1], 
+                game_title[2], 
+                game_title[3], 
+                manuf_string,
+                model_string,
+                ((flash_valid) ? ((seq_type == 0) ? "AIN Flash Cartridge" : "WR Flash Cartridge") : ((flash_empty) ? "Bad or No Cartridge" : "Normal Cartridge")),
+                ((flash_valid) ? ((protect == 0x00) ? "No" : "Yes") : "N/A"),
+                ((flash_empty) ? "Yes" : "No"));
+            fat_set_filesize(FILE_NO_INFO, length);
         }
-        else {
-            fat_set_fileext(FILE_NO_ROM, "GB ");
-        }
-        cart_set_mbc_type(mbc_type);
     }
     else {
-        cart_set_mbc_type(MBC5); // Could be a empty flash cart
+        multicart_mode = FALSE;
+        // Write into summary file
+        size_t length = sprintf(
+            (char *)info_file_content, 
+            "Game: %s\r\nROM: %dKB\r\nRAM: %dKB\r\nMBC: %s\r\nFlash Manufacturer: %s\r\nFlash Model: %s\r\nCart Type: %s\r\nProtect: %s\r\nCFI Valid: %s\r\nEmpty: %s\r\nMulitCart Mode: %s\r\nGame Valid: %s\r\n", 
+            game_title[0], 
+            rom_size[0] / 1024, 
+            ram_size[0] / 1024, 
+            mbc_type_string,
+            manuf_string,
+            model_string,
+            ((flash_valid) ? ((seq_type == 0) ? "AIN Flash Cartridge" : "WR Flash Cartridge") : ((flash_empty) ? "Bad or No Cartridge" : "Normal Cartridge")),
+            ((flash_valid) ? ((protect == 0x00) ? "No" : "Yes") : "N/A"),
+            ((cfi_valid)? "Yes" : "No"),
+            ((flash_empty) ? "Yes" : "No"),
+            ((multicart_mode) ? "Yes" : "No"),
+            ((game_valid[0])? "Yes" : "No"));
+        fat_set_filesize(FILE_NO_INFO, length);
+    
+        // Set pre-set files
+        if (game_valid[0]) {
+            fat_set_filename(FILE_NO_ROM, game_title[0]);
+            fat_set_filename(FILE_NO_RAM, game_title[0]);
+            fat_set_filesize(FILE_NO_ROM, rom_size[0]);
+            fat_set_filesize(FILE_NO_RAM, ram_size[0]);
+            if (cgb_game[0]) {
+                fat_set_fileext(FILE_NO_ROM, "GBC");
+            }
+            else {
+                fat_set_fileext(FILE_NO_ROM, "GB ");
+            }
+            cart_set_mbc_type(mbc_type);
+        }
+        else {
+            cart_set_mbc_type(MBC5); // Could be a empty flash cart...?
+        }
     }
     
     free(buf);
