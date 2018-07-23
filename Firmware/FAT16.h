@@ -2,6 +2,7 @@
 #define __FAT16_H__
 
 #include <stdint.h>
+#include "main.h"
 
 #define WBVAL(x) ((x) & 0xFF), (((x) >> 8) & 0xFF)
 #define QBVAL(x) ((x) & 0xFF), (((x) >> 8) & 0xFF),\
@@ -65,6 +66,7 @@
 #define FILE_INFO_MAX_SIZE 256
 
 extern uint8_t info_file_content[];
+extern volatile bool writing_done;
 
 void fat_init();
 

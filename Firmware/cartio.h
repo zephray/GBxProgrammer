@@ -116,6 +116,7 @@ void cart_eeprom_write(uint16_t addr, uint8_t *buffer, cap_t cap);
 void cart_set_seq_type(seq_type_t new_type);
 void cart_set_wait_mode(wait_mode_t new_mode);
 void cart_erase_flash();
+void cart_erase_sector(uint32_t addr);
 void cart_program_byte(uint32_t addr, uint8_t dat);
 void cart_enter_product_id_mode();
 void cart_leave_product_id_mode();

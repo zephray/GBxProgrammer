@@ -530,6 +530,16 @@ void cart_probe_cart() {
     free(buf);
 }
 
+#if defined (__ICCARM__)
+__intrinsic void __DSB(void) {
+    asm("dsb");
+}
+#endif
+
+void sys_reset() {
+    NVIC_SystemReset();
+}
+
 int main(void)
 {
     /*!< At this stage the microcontroller clock setting is already configured, 
@@ -567,6 +577,12 @@ int main(void)
 
     while (1)
     {
+        // this has to be handled outside of fat emulation layer, since the
+        // USB operation need to be done before it reset
+        if (writing_done) {
+            delay_ms(1000);
+            sys_reset();
+        }
     }
 }
 

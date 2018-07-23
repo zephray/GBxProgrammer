@@ -3,7 +3,6 @@
 #include "string.h"
 #include "stdlib.h"
 #include "fat16.h"
-#include "main.h"
 #include "cartio.h"
 
 // ROM start sector = 36 + (1024 - 2) * 4 = 4124 
@@ -105,7 +104,7 @@ uint8_t dir_sector_file[DIR_FILE_ATTR]=
 
 uint8_t dir_sector_free[DIR_WRITABLE_SIZE];
 
-const char info_file_fixed[] = "** GBxProgrammer V0.9.0 **\r\nPlease do not overwrite any file!\r\n请不要覆盖文件！\r\nSee gbxprog.zephray.me for information about MultiCart support.\r\n\r\n";
+const char info_file_fixed[] = "** GBxProgrammer V0.9.1 **\r\nPlease do not overwrite any file!\r\n请不要覆盖文件！\r\nSee gbxprog.zephray.me for information about MultiCart support.\r\n\r\n";
 
 bool writing_rom = TRUE;
 bool writing_valid = FALSE;
@@ -121,12 +120,15 @@ extern bool multicart_mode;
 bool writing_loader;
 uint32_t dir_file_size;
 extern const uint32_t addr_lut[4];
+volatile bool writing_done;
+uint32_t writing_size;
 
 uint8_t info_file_content[FILE_INFO_MAX_SIZE];
 
 void fat_init() {
     memset(dir_sector_free, DIR_WRITABLE_SIZE, 0x00);
     writing_valid = FALSE;
+    writing_done = FALSE;
 }
 
 void fat_set_filesize(uint32_t file_no, uint32_t file_size) {
@@ -140,10 +142,10 @@ void fat_set_filesize(uint32_t file_no, uint32_t file_size) {
 
 uint32_t fat_get_filesize(uint32_t file_no) {
     uint32_t file_size;
-    file_size  = dir_sector_file[17*file_no + 13] << 24;
-    file_size |= dir_sector_file[17*file_no + 14] << 16;
-    file_size |= dir_sector_file[17*file_no + 15] << 8;
-    file_size |= dir_sector_file[17*file_no + 16];
+    file_size  = dir_sector_file[17*file_no + 13];
+    file_size |= dir_sector_file[17*file_no + 14] << 8;
+    file_size |= dir_sector_file[17*file_no + 15] << 16;
+    file_size |= dir_sector_file[17*file_no + 16] << 24;
     return file_size;
 }
 
@@ -195,13 +197,13 @@ uint32_t fat_read_lba(uint32_t lba, uint8_t* data)
             dir_file_size = file_count * 32;
             memcpy(data + DIR_LABEL_SIZE + dir_file_size, dir_sector_free, DIR_WRITABLE_SIZE);
             
-            /*if (multicart_mode) {
+            if (multicart_mode) {
                 for (uint32_t i = 0; i < 4; i++) {
                     if (!game_valid[i]) {
                         data[DIR_LABEL_SIZE + FILE_NO_ROM_SLOT(i)*32] = 0xE5;
                     }
                 }
-            }*/
+            }
         }
     }
     else if (lba >= FAT_ENTRY_SECTOR(0)) {
@@ -321,6 +323,10 @@ uint32_t fat_write_lba(uint32_t lba, uint8_t* data)
                 cart_gb_rom_program_bulk(data, offset + target * BYTES_PER_SECTOR, BYTES_PER_SECTOR, ((!flash_empty)||(multicart_mode)));
             else
                 cart_gb_ram_write_bulk(data, offset + target * BYTES_PER_SECTOR, BYTES_PER_SECTOR);
+            if (((target+1)*BYTES_PER_SECTOR) >= writing_size) {
+                //finished, but not reset yet.
+                writing_done = TRUE;
+            }
         }
     }
     else if (lba >= FILEDATA_START_SECTOR(INFO_FILE_START_CLUSTER)) {
@@ -342,6 +348,7 @@ uint32_t fat_write_lba(uint32_t lba, uint8_t* data)
                 // ROM file or loader file (multicart mode) get deleted, issue a full cart erase.
                 cart_erase_flash();
                 flash_empty = TRUE;
+                sys_reset();
             }
             if ((*(dir_sector_file + 2 * 17) == 0xE5)&&(ram_size[0] != 0)) {
                 // RAM　file get deleted, fill the RAM with 0xFF
@@ -352,12 +359,14 @@ uint32_t fat_write_lba(uint32_t lba, uint8_t* data)
                     cart_gb_ram_write_bulk(empty, i * 1024, 1024);
                 }
                 free(empty);
+                sys_reset();
             }
             if ((multicart_mode)) {
                 for (uint32_t i = 0; i < 4; i++) {
                     if ((*(dir_sector_file + FILE_NO_ROM_SLOT(i) * 17) == 0xE5)&&(game_valid[i])) {
                         cart_erase_sector(addr_lut[i]); //only erase the first sector
                         game_valid[i] = FALSE;
+                        sys_reset();
                     }
                     if (*(dir_sector_file + FILE_NO_RAM_SLOT(i) * 17) == 0xE5) {
                         uint8_t *empty;
@@ -367,6 +376,7 @@ uint32_t fat_write_lba(uint32_t lba, uint8_t* data)
                             cart_gb_ram_write_bulk(empty, 32 * 1024 * i + 1024 * j, 1024);
                         }
                         free(empty);
+                        sys_reset();
                     }
                 }
                     
@@ -400,6 +410,7 @@ uint32_t fat_write_lba(uint32_t lba, uint8_t* data)
                         }
                         else
                             writing_valid = TRUE;
+                        writing_done = FALSE;
                         writing_rom = TRUE;
                         writing_start_cluster = (uint16_t)dir_sector_free[i * 32 + 27] << 8;
                         writing_start_cluster |=  dir_sector_free[i * 32 + 26];
@@ -411,6 +422,10 @@ uint32_t fat_write_lba(uint32_t lba, uint8_t* data)
                             cart_erase_flash();
                             flash_empty = TRUE;
                         }
+                        writing_size  = (uint32_t)dir_sector_free[i * 32 + 28];
+                        writing_size |= (uint32_t)dir_sector_free[i * 32 + 29] << 8;
+                        writing_size |= (uint32_t)dir_sector_free[i * 32 + 30] << 16;
+                        writing_size |= (uint32_t)dir_sector_free[i * 32 + 31] << 24;
                     }
                     else if (memcmp(dir_sector_free + i * 32 + 8, "SAV", 3) == 0) {
                         if (multicart_mode) {
@@ -425,9 +440,14 @@ uint32_t fat_write_lba(uint32_t lba, uint8_t* data)
                         }
                         else
                             writing_valid = TRUE;
+                        writing_done = FALSE;
                         writing_rom = FALSE;
                         writing_start_cluster = (uint16_t)dir_sector_free[i * 32 + 27] << 8;
                         writing_start_cluster |=  dir_sector_free[i * 32 + 26];
+                        writing_size  = (uint32_t)dir_sector_free[i * 32 + 28];
+                        writing_size |= (uint32_t)dir_sector_free[i * 32 + 29] << 8;
+                        writing_size |= (uint32_t)dir_sector_free[i * 32 + 30] << 16;
+                        writing_size |= (uint32_t)dir_sector_free[i * 32 + 31] << 24;
                     }
                 }
             }

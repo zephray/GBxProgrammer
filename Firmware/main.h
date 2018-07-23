@@ -13,4 +13,6 @@ typedef enum
 }
 bool;
 
+void sys_reset();
+
 #endif
